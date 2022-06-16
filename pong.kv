@@ -1,0 +1,67 @@
+<Pong>:
+    ball: ball
+    player1: player1
+    player2: player2
+
+    canvas:
+        Rectangle:
+            pos: self.center_x - 5, 0
+            size: 10, self.height / 2 - 80
+
+        Rectangle:  
+            pos: self.center_x - 5, self.height / 2 + 80
+            size: 10, self.height / 2 - 200
+
+    Label:
+        font_size: 70
+        center_x: root.width / 4
+        top: root.top - 50
+        text: str(root.player1.score)
+
+    Label:
+        font_size: 70
+        center_x: root.width * 3 / 4
+        top: root.top - 50
+        text: str(root.player2.score)
+
+    Label:
+        font_size: 90
+        id: streak
+        center: root.center
+        text: str(root.streak)
+
+    Ball:
+        id: ball
+        center: self.parent.center
+
+    Paddle:
+        id: player1
+        x: root.x
+        center_y: root.center_y
+
+    Paddle:
+        id: player2
+        x: root.width - self.width
+        center_y: root.center_y
+
+    Button:
+        background_normal: root.settings.infoLoc
+        background_down: root.settings.infoLocPressed
+        center_x: root.center_x
+        top: root.top
+
+
+<Ball>:
+    size: 50, 50
+
+    canvas:
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+
+<Paddle>:    
+    canvas:
+        Rectangle:
+            pos: self.pos
+            size: self.size
