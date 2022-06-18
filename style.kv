@@ -1,0 +1,211 @@
+<OptionButton@Button>:
+    background_color: (0, 0, 0, 0)
+    font_size: self.height / 2
+
+    canvas.before:
+        Color: 
+            rgba: (255, 255, 255, 1)
+        Line:
+            width: self.height / 40
+            rectangle: self.x, self.y, self.width, self.height
+
+<BoxLayout>:
+    orientation: "vertical"
+
+<Rectangle>:
+    Color:
+        rgba: (255, 0, 0, 0)
+
+<Ball>:
+    size_hint: (None, None)
+
+    canvas:
+        Color:
+            rgba: 255, 255, 255, 1
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+
+<MenuScreen>:
+    size: root.width, root.height
+
+    Label:
+        text: "MENU"
+        font_size: root.height / 8
+        pos_hint: {"center_x": 0.5, "center_y": 0.8}
+
+    BoxLayout:
+        size_hint: 0.8, 0.5
+        pos_hint: {"center_x": 0.5, "y": 0.1}
+        spacing: self.height / 20
+        
+        OptionButton:
+            text: "Play alone"
+            on_press:
+                root.manager.transition.duration = root.settings.transition_duration
+                root.manager.transition.direction = "up"
+                root.manager.get_screen("game").opt = "solo"
+                root.manager.current = "game"
+                # root.manager.current_screen.set_up("solo")
+
+        OptionButton: 
+            text: "Play with friends"
+            on_press:
+                root.manager.transition.duration = root.settings.transition_duration
+                root.manager.transition.direction = "left"
+                root.manager.current = "connect"
+    
+        OptionButton: 
+            text: "Stats"
+            on_press:
+                root.manager.transition.duration = root.settings.transition_duration
+                root.manager.transition.direction = "right"
+                root.manager.current = "stats"
+
+
+<GameScreen>:
+    size: root.width, root.height 
+    name_1: name_1
+    name_2: name_2
+    score_1: score_1
+    score_2: score_2
+    player2: player2
+
+    canvas:
+        Color:
+            rgba: (255, 255, 255, 0.8)
+        Rectangle:
+            pos: root.center_x - root.width / 200, 0
+            size: root.width / 100, root.height * 0.4
+        Rectangle:  
+            pos: root.center_x - root.width / 200, self.height * 0.6
+            size: root.width / 100, root.height * 0.25
+
+    Label:
+        id: name_1
+        halign: "left"
+        valign: "middle"
+        size_hint: (0.2, 0.1)
+        text_size: self.size
+        font_size: root.height / 20
+        pos_hint: {"x": 0.02, "top": 0.98}
+
+    Label:
+        id: name_2
+        halign: "right"
+        valign: "middle"
+        size_hint: (0.2, 0.1)
+        text_size: self.size
+        font_size: root.height / 20
+        pos_hint: {"right": 0.98, "top": 0.98}
+
+    Label:
+        id: score_1
+        font_size: root.height / 15
+        pos_hint: {"center_x": 0.25, "center_y": 0.9}
+
+    Label:
+        id: score_2
+        font_size: root.height / 15
+        pos_hint: {"center_x": 0.75, "center_y": 0.9}
+
+    Label:
+        id: streak
+        opacity: 0.4
+        font_size: root.height / 10
+        pos_hint: {"center_x": 0.5, "center_y": 0.5}
+        text: str(root.streak)
+
+    Paddle:
+        id: player2
+        center_y: root.center_y
+        right: root.right
+        size_hint: 0.02, 0.33
+
+    Button:
+        canvas.before: 
+            Color:
+                rgba: (255, 255, 255, 1)
+            RoundedRectangle:
+                pos: root.center_x - root.height / 22,  0.879 * root.height, 
+                size: root.height / 11, root.height / 11  
+                radius: [self.width / 2,]
+
+            Color:
+                rgba: (0, 0, 0, 1)
+            RoundedRectangle:
+                pos: root.center_x - root.height / 24,  0.8825 * root.height, 
+                size: root.height / 12, root.height / 12
+                radius: [self.width / 2,]
+
+        background_color: (0, 0, 0, 0)
+        font_size: root.height / 14
+        pos_hint: {"center_x": 0.5, "center_y": 0.925}
+        size_hint: (0.065, 0.075)
+        text: "i"
+        on_press:
+            root.pause()
+            root.manager.transition.duration = 0
+            root.manager.current = "pause"
+
+
+<PauseScreen>:
+    Label:
+        text: "Game Paused"
+        font_size: root.height / 8
+        pos_hint: {"center_x": 0.5, "center_y": 0.8}
+
+    BoxLayout:
+        size_hint: 0.6, 0.4
+        pos_hint: {"center_x": 0.5, "y": 0.2}
+        spacing: self.height / 10
+
+        OptionButton:
+            text:
+                "Resume"
+            on_press:
+                root.manager.transition.duration = 0
+                root.manager.current = "game"
+                root.manager.get_screen("game").start_countdown(root.manager.get_screen("game").unpause)
+
+        OptionButton:
+            text:
+                "Go to menu"
+            on_press:
+                root.manager.transition.duration = root.settings.transition_duration
+                root.manager.transition.direction = "right"
+                root.manager.current = "menu"
+                root.manager.get_screen("game").reset()
+
+        OptionButton:
+            text: "Exit"
+            on_press: exit(0)
+
+<ConnectScreen>:
+    GridLayout:
+        cols: 1
+        rows: 4
+        spacing: root.height / 20
+        padding: root.height / 5
+
+        OptionButton:
+            text: "Play on this PC"
+            on_press:
+                root.manager.transition.duration = root.settings.transition_duration
+                root.manager.transition.direction = "up"
+                root.manager.current = "game"
+                root.manager.current_screen.set_up("offline")
+        
+        OptionButton:
+            text: "Host game"
+        
+        OptionButton:
+            text: "Join game"
+
+        OptionButton:
+            text: "Go back"
+            on_press:
+                root.manager.transition.duration = root.settings.transition_duration
+                root.manager.transition.direction = "right"
+                root.manager.current = "menu"

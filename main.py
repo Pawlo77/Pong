@@ -1,25 +1,27 @@
 import kivy
-kivy.require("2.1.0")
 
 from kivy.app import App
-from kivy.clock import Clock
+from kivy.uix.screenmanager import ScreenManager
+from kivy.lang import Builder
 
-from random import choice
+from screens import *
+from widgets import *
 
-from widgets import Pong
-from settings import Settings
-
+kivy.require("2.1.0")
+Builder.load_file("style.kv")
 
 class PongApp(App):
 
     def build(self): 
-        game = Pong()
+        sm = ScreenManager()
+        
+        sm.add_widget(MenuScreen(name="menu"))
+        sm.add_widget(ConnectScreen(name="connect"))
+        sm.add_widget(GameScreen(name="game"))
+        sm.add_widget(StatsScreen(name="stats"))
+        sm.add_widget(PauseScreen(name="pause"))
 
-        direction = choice([-1, 1])
-        game.serve_ball(direction)
-
-        Clock.schedule_interval(game.update, 1. / Settings.fps)
-        return game
+        return sm
 
 
 if __name__ == '__main__':

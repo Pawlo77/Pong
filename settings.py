@@ -1,9 +1,18 @@
+import os
+
+
 class Settings():
     fps = 60.
-    speed = 10.
-    speedup = 1.1
-    moveSpeed = 5
-    startPaddleSize = 300
+    speed = 0.01
+    speedup = 1.05
+    moveSpeed = 0.02
+    botMoveSpeed = 0.01
+
+    startPaddleSize = 0.3
     paddleShrink = 0.95
-    infoLoc = "info.jpeg"
-    infoLocPressed = "info2.png"
+
+    font_size = 120
+    transition_duration = 2
+
+    default_port = 251
+    server_alive = False
