@@ -1,9 +1,6 @@
 from kivy.uix.widget import Widget
-from kivy.properties import NumericProperty, ReferenceListProperty, ColorProperty, StringProperty
+from kivy.properties import NumericProperty, ReferenceListProperty, ColorProperty, StringProperty, BooleanProperty
 from kivy.vector import Vector
-from kivy.graphics import Rectangle, Color
-
-from functools import partial
 
 from settings import Settings
 
@@ -13,23 +10,7 @@ class Paddle(Widget):
     color = ColorProperty("white")
     move_direction = NumericProperty(0)
     name = StringProperty("")
-
-    def __init__(self, **kwargs):
-        super(Paddle, self).__init__(**kwargs)
-
-        # self.size_hint = (None, None)
-        with self.canvas:
-            Color(255, 255, 255, 1)
-            self.rect = Rectangle(pos=self.pos, size=self.size)
-            self.bind(pos = self.update_rect, size = self.update_rect)
-
-    def bind_update(self, root):
-        data = partial(root.update_player, self)
-        self.bind(color = data, score = data)
-
-    def update_rect(self, *dt):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
+    bot = BooleanProperty(False)
     
     def bounce_ball(self, ball):
         if self.collide_widget(ball):
@@ -41,14 +22,6 @@ class Paddle(Widget):
             return True
         return False
 
-    def move(self, root):
-        if self.move_direction == 1:
-            new = self.top + Settings.moveSpeed * root.height
-            self.top = min(new, root.top)
-        elif self.move_direction == -1:
-            new = self.y - Settings.moveSpeed * root.height
-            self.y = max(new, root.y)
-
     def reward(self):
         self.color = "green"
         self.size[1] *= Settings.paddleShrink
@@ -58,6 +31,14 @@ class Paddle(Widget):
         self.color = "white"
         self.center_y = root.center_y
 
+    @staticmethod
+    def move(me, root):
+        if me.move_direction == 1:
+            new = me.top + Settings.moveSpeed * root.height
+            me.top = min(new, root.top)
+        elif me.move_direction == -1:
+            new = me.y - Settings.moveSpeed * root.height
+            me.y = max(new, root.y)
 
 class Ball(Widget):
     velocity_x = NumericProperty(0)     
