@@ -1,163 +1,139 @@
-import socket 
-import json
 from _thread import *
 import time
+import socket
 
 from settings import *
+from internet import Internet
 
 
-class Server:
+class Server(Internet):
     def __init__(self):
         self.reset(True)
 
-    def create(self, server_name):
+    def reset(self, initial=False):
+        if initial:
+            Settings.inform(f"Setting up a server.")
+        else:
+            Settings.inform(f"Resetting a server ({self.port}).")
+
+            if self.socket_ is not None:
+                self.shutdown(self.socket_)
+
+        self.screen = None
+        self.socket_ = None
+        self.listening = False
+        self.playing = False
+        self.port = None
+        self.server_name = ""
+        self.clients = []
+
+    def initialize(self, server_name, screen):
+        Settings.inform(f"Initializing a server.")
         self.server_name = server_name
-        while self.port < Settings.default_port + Settings.max_rooms_num:
+        self.screen = screen
+        port = Settings.default_port
+        socket_ = None
+
+        socket_ = socket.socket()
+        while port < Settings.default_port + Settings.rooms_num:
             try:
-                self.socket_.bind((Settings.host, self.port))
-            except OSError:
-                self.port += 1
-            except Exception as e: 
+                socket_.bind((Settings.host, port))
+            except Exception as e:
                 Settings.handle_error(e)
-                self.port += 1
-            else: 
-                start_new_thread(self.listen, ())         
+            else:
+                socket_.listen(1)
+                self.socket_ = socket_
+                self.port = port
                 self.listening = True
-                Settings.inform(f"Server created at {self.port}.")
-                return
+                start_new_thread(self.listen, ())         
+                start_new_thread(self.listen_clients, ())         
+                Settings.inform(f"Server created at {port}.")
+                break
 
-    def send(self, conn, data):
-        data = json.dumps(data).encode(Settings.encoding)
-        
-        try:
-            conn.send(data)
-        except Exception as e:
-            Settings.handle_error(e)
-            return False
-        return True
-
-    def recive(self, conn):
-        try:
-            data = conn.recv(Settings.conn_data_limit).decode(Settings.encoding)
-
-            if data:
-                return json.loads(data)
-        except Exception as e:
-            Settings.handle_error(e)
-        return {}
+            port += 1
 
     def shutdown(self, obj):
         try:
-            obj.shutdown(socket.SHUT_RDWR)
+            obj.close()
         except Exception as e:
             Settings.handle_error(e)
 
-    def reset(self, initial=False):
-        Settings.inform("Server resetting.")
-        self.listening = False
-        self.game = False
-        if not initial:
-            self.shutdown(self.socket_)
-            Settings.inform(f"Server closed ({self.port}).")
-        self.socket_ = socket.socket()
-        self.server_name = ""
-        self.queue = {} # users waiting for joining
-        self.port = Settings.default_port
+    def accept(self, conn, port):
+        if self.send(conn, REQUEST_ACCEPTED):
+            Settings.inform("Game from {port} accepted.")
+            self.playing = True
+            self.listening = False
 
-    def accept(self, port):
-        if port in self.queue:
-            conn, client_name = self.queue[port]
-            
-            if self.send(conn, REQEST_ACCEPTED):
-                Settings.inform("Game from {port} accepted.")
-                self.game = True
-                self.listening = False
-    
-    def wait_for_accept(self, conn, port):
-        t0 = time.time()
+    def get_client(self, client_port):
+        for (conn, port, lastConn) in self.server.clients:
+            if port == client_port: 
+                return conn, port, lastConn
+        return None
 
-        while True:
-            time.sleep(Settings.server_frequency)
-
-            if self.listening:
-                t1 = time.time()
-                # if it haven't shown its existance for more than 10 sec without saying
-                if t1 - t0 > 10:
-                    if port in self.queue:
-                        del self.queue[port] 
-                    self.shutdown(conn)
-
-                    Settings.inform(f"Connection with {port} lost.")
-                    return
-                
-                # if user backs up
-                data = self.recive(conn)
-                if data == ABORT_WAITING:
-                    if port in self.queue:
-                        del self.queue[port]
-                    self.shutdown(conn)
-
-                    Settings.inform(f"Client {port} aborted.")
-                    return
-                
-                # if he is still waiting, show him that we are alive too
-                elif data == REQUEST_GAME:
-                    t0 = t1
-                    self.send(conn, REQUEST_RECIVED)
-                    Settings.inform(f"Client {port} is still waiting.")
-            else:
-                break
-
-        # if we don't wait anymore
-        if port in self.queue:
-            del self.queue[port]
+    def remove(self, conn, idx, port):
         self.shutdown(conn)
+        self.clients.pop(idx)
+        self.screen.remove_client(port)
 
-        if self.server_name: # if it isn't our foult
-            Settings.inform(f"Stopped waiting (port {port}).")
+    def listen_clients(self):
+        while self.listening:
+            for idx, (conn, port, lastConn) in enumerate(self.clients):
+                t = time.time()
+                if t - lastConn > Settings.connection_timeout:
+                    self.remove(conn, idx, port)
+                    Settings.inform(f"Connection with {port} lost.")
+                    continue
 
-    def listen(self):
-        self.socket_.listen(1)
-
-        while True:
-            time.sleep(Settings.server_frequency)
-
-            if self.listening:
-                conn, address = self.socket_.accept()
                 data = self.recive(conn)
-
                 if data == ALIVE:
-                    self.send(conn, {
-                        "server_name": self.server_name,
-                        **all
-                    })
+                    if self.send(conn, REQUEST_RECIVED):
+                        self.clients[idx] = [conn, port, t]
+                        Settings.inform(f"Connection with client {port} renewed.")
+                        continue
 
-                    Settings.inform(f"Client {address[1]} checked if server is alive.")
-                    self.shutdown(conn)
-
+                elif data == WAITING:
+                    if self.send(conn, REQUEST_RECIVED):
+                        self.clients[idx] = [conn, port, t]
+                        Settings.inform(f"Client {port} is still waiting to join.")
+                        continue
+  
+                elif data == ABORT_WAITING:
+                    if self.send(conn, REQUEST_RECIVED):
+                        self.remove(conn, idx, port)
+                        self.clients[idx] = [conn, port, t]
+                        Settings.inform(f"Client {port} aborted.")
+                        continue
+                
                 elif "client_name" in data:
                     client_name = data["client_name"]
                     del data["client_name"]
 
                     if data == REQUEST_GAME:
-                        self.send(conn, REQUEST_RECIVED)
+                        if self.send(conn, REQUEST_RECIVED):
+                            self.clients[idx] = [conn, port, t]
+                            self.screen.add_client(client_name, port)
+                            Settings.inform(f"Client {port} wants to join a game.")
+                            continue
 
-                        pid = start_new_thread(self.wait_for_accept, (conn, address[1]))
-                        self.queue[address[1]] = (conn, client_name)
-                        Settings.inform(f"Client {address[1]} requested the game.")
-                    else:
-                        self.shutdown(conn)
-                else:  
-                    self.shutdown(conn)
-            else:
-                return
+                self.remove(conn, idx, port)
+                Settings.inform(f"Connection with {port} lost.")   
+                time.sleep(Settings.server_frequency)
 
+    def listen(self):
+        while self.listening:
+            conn, address = self.socket_.accept()
+            data = self.recive(conn)
 
-if __name__ == "__main__":
-    server = Server()
-    if server.create():
-        print("Server created at ", server.port)
-        server.listen()
+            if data == ALIVE:
+                data = {"server_name": self.server_name, **all}
+                if self.send(conn, data):
+                    Settings.inform(f"New connection from {address[1]}.")
+                    self.clients.append([conn, address[1], time.time()])
+                    continue
+
+            self.shutdown(conn)
+            time.sleep(Settings.server_frequency)
+
 
 # import psutil
 # conns = psutil.net_connections()

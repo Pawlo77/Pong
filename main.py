@@ -7,8 +7,10 @@ from kivy.lang import Builder
 from screens import *
 from widgets import *
 
+
 kivy.require("2.1.0")
 Builder.load_file("style.kv")
+
 
 class PongApp(App):
 
@@ -18,8 +20,8 @@ class PongApp(App):
         sm.add_widget(ConnectScreen(name="connect"))
         sm.add_widget(MenuScreen(name="menu"))
         sm.add_widget(NameScreen(name="name"))
-        sm.add_widget(RoomScreen(name="room"))
-        sm.add_widget(RoomsScreen(name="rooms"))
+        sm.add_widget(ServerScreen(name="server"))
+        sm.add_widget(ClientScreen(name="client"))
         sm.add_widget(GameScreen(name="game"))
         sm.add_widget(StatsScreen(name="stats"))
         sm.add_widget(PauseScreen(name="pause"))

@@ -68,13 +68,22 @@
     auto_dismiss: False
     title_size: max(min(self.height / 10, self.width / 20), 1)
 
+<TickingPopup>
+    OptionButton:
+        font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
+        size_hint: (0.4, 0.2)
+        pos_hint: {"y": 0, "x": 0}
+        text: root.exit_text
+        on_press: 
+            root.back_up()
+
 <AcceptPopup>:     
     FloatLayout:        
         DefaultLabel:
             font_size: max(min(self.height / 3, self.width / 5), 1)
             size_hint: (0.8, 0.5)
             pos_hint: {"y": 0.5, "center_x": 0.5}
-            text: "Are sure you want to play with " + root.name + " ?"
+            text: "Are sure you want to play against " + root.client_name + " ?"
         
         DefaultLabel:
             size_hint: (0.8, 0.3)
@@ -85,18 +94,10 @@
             font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
             size_hint: (0.5, 0.2)
             pos_hint: {"y": 0, "right": 1}
-            text: "Let's go"
+            text: "Play"
             on_press: 
-                root.dismiss()
-                root.root.server.accept(root.port)
+                root.accept()
 
-        OptionButton:
-            font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
-            size_hint: (0.4, 0.2)
-            pos_hint: {"y": 0, "x": 0}
-            text: "Never mind"
-            on_press: 
-                root.back_up()
 
 <JoinPopup>:
     FloatLayout:
@@ -105,15 +106,6 @@
             size_hint: (0.8, 0.5)
             pos_hint: {"y": 0.5, "center_x": 0.5}
             text: "Waiting for host to accept" + root.time % 4 * "."
-        
-        OptionButton:
-            font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
-            size_hint: (0.4, 0.2)
-            pos_hint: {"y": 0, "x": 0}
-            text: "Abandon the game"
-            on_press: 
-                root.root.client.abandon()
-                root.back_up()
 
 
 <ErrorPopup>:
@@ -189,7 +181,7 @@
                 root.manager.transition.duration = root.settings.transition_duration
                 root.manager.transition.direction = "left"
                 root.manager.current = "name"
-                root.manager.current_screen.next_screen = "room"
+                root.manager.current_screen.next_screen = "server"
         
         OptionButton:
             text: "Join game"
@@ -197,7 +189,7 @@
                 root.manager.transition.duration = root.settings.transition_duration
                 root.manager.transition.direction = "left"
                 root.manager.current = "name"
-                root.manager.current_screen.next_screen = "rooms"
+                root.manager.current_screen.next_screen = "client"
 
         OptionButton:
             text: "Go back"
@@ -233,7 +225,7 @@
                     rectangle: self.x, self.y, self.width, self.height
 
         OptionButton:
-            text: "Create Server" if root.next_screen == "room" else "Seek games"
+            text: "Create Server" if root.next_screen == "server" else "Seek games"
             on_press:
                 root.validate()
 
@@ -246,7 +238,7 @@
                 root.reset()
 
 
-<RoomScreen>:
+<ServerScreen>:
     DefaultLabel:
         text: "Waiting for players" + root.dots * "."
         pos_hint: {"center_x": 0.5, "y": 0.8}
@@ -278,7 +270,7 @@
         size_hint: (0.8, 0.44)
         data: root.clients_list
 
-<RoomsScreen>
+<ClientScreen>
     DefaultLabel:
         text: "Searching servers" + root.dots * "."
         pos_hint: {"center_x": 0.5, "y": 0.8}

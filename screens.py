@@ -47,104 +47,109 @@ class NameScreen(Screen, MyScreen):
         self.username.text = ""
 
 
-class RoomScreen(Screen, MyScreen):
+class ServerScreen(Screen, MyScreen):
     dots = NumericProperty(0)
     time = NumericProperty(Settings.waiting_timeout)
     clients_list = ListProperty([])
 
     def __init__(self, **kwargs):
-        super(RoomScreen, self).__init__(**kwargs)
-        self.during_counting = None
-        self.during_ticking = None
-        self.server = Server()
+        super(ServerScreen, self).__init__(**kwargs)
+        self.reset(True)
+
+    def reset(self, initial=False):
+        if not initial and self.ticking is not None:
+            self.ticking.cancel()
+        else:
+            self.ticking = None
+        if not initial:
+            self.server.reset()
+        else:
+            self.server = Server()
+        self.dots = 0
+        self.accepting = None
+        self.clients_list = []
+        self.time = Settings.waiting_timeout
 
     def initialize(self, server_name):
-        self.during_counting = Clock.schedule_interval(self.dot_count, 1)
-        self.during_ticking = Clock.schedule_interval(self.tick, 1)
-
-        self.server.create(server_name)
+        self.reset()
+        self.ticking = Clock.schedule_interval(self.tick, 1)
+        self.server.initialize(server_name, self)
         if not self.server.listening:
             self.manager.current = "connect"
             ErrorPopup("Server error", "Unable to create server, try again later.").open()
             self.reset()
 
-    def dot_count(self, *dt):
-        self.dots = (self.dots + 1) % 4
+    def remove_client(self, port):
+        for idx, entry in enumerate(self.clients_list):
+            if entry["port"] == port:
+                self.clients_list.pop(idx)
+                return
+
+    def add_client(self, client_name, port):
+        self.clients_list.append({
+            "text": client_name, "port": port, "root": self
+        })
 
     def tick(self, *dt):
         self.time -= 1
-
-        if self.time % Settings.server_frequency == 0:
-            self.clients_list = []
-            for port, data in self.server.queue.items():
-                self.clients_list.append({
-                    "text": data[1], "port": port, "root": self
-                })
-            self.clients_list.sort(key=lambda x: x["text"])
+        self.dots = (self.dots + 1) % 4
 
         if self.time <= 0:
             self.manager.current = "connect"
             ErrorPopup("Server closed", "Your server was closed bacause you exceeded connection time.").open()
             self.reset()
 
-    def reset(self):
-        if self.during_counting is not None: 
-            self.during_counting.cancel()
-        if self.during_ticking is not None:
-            self.during_ticking.cancel()
-        self.dots = 0
-        self.clients_list = []
-        self.time = Settings.waiting_timeout
-        self.server.reset()
-
     def handler(self, client_name, client_port):
-        if self.during_ticking is not None:
-            self.during_ticking.cancel()
-        AcceptPopup(self, client_name, client_port, 1).open()
+        data = self.server.get_client(client_port)
+
+        if data is not None:
+            conn, client_port, _ = data
+            self.accepting = AcceptPopup(self, client_name, client_port, conn, self).open()
 
 
-class RoomsScreen(Screen, MyScreen):
+class ClientScreen(Screen, MyScreen):
     servers_list = ListProperty([])
     dots = NumericProperty(0)
 
     def __init__(self, **kwargs):
-        super(RoomsScreen, self).__init__(**kwargs)
-        self.during_counting = None
-        self.during_scaning = None
-        self.during_waiting = None
-        self.waiting = None
-        self.client = Client()
+        super(ClientScreen, self).__init__(**kwargs)
+        self.reset(True)
 
-    def initialize(self, client_name):
-        self.client.create(client_name)
-        self.during_ticking = Clock.schedule_interval(self.tick, Settings.client_frequency)
-        self.during_counting = Clock.schedule_interval(self.dot_count, 1)
-
-    def dot_count(self, *dt):
-        self.dots = (self.dots + 1) % 4
-
-    def tick(self, *dt):
-        self.servers_list = []
-        for port, server_name in self.client.rooms.items():
-            self.servers_list.append({
-                "text": server_name, "port": port, "root": self
-                })
-        self.servers_list.sort(key=lambda x: x["text"])
-
-    def reset(self):
-        if self.during_ticking is not None:
-            self.during_ticking.cancel()
-        if self.during_counting is not None:
-            self.during_counting.cancel()
+    def reset(self, initial=False):
+        if not initial and self.ticking is not None:
+            self.ticking.cancel()
+        else:
+            self.ticking = None
+        if not initial:
+            self.client.reset()
+        else:
+            self.client = Client()
         self.dots = 0
         self.servers_list = []
-        self.client.reset()
+        self.joining = None
+
+    def initialize(self, client_name):
+        self.reset()
+        self.client.initialize(client_name, self)
+        self.ticking = Clock.schedule_interval(self.tick, 1)
+
+    def add_server(self, server_name, port):
+        self.servers_list.append({
+            "text": server_name, "port": port, "root": self
+        })
+
+    def remove_server(self, port):
+        for idx, entry in enumerate(self.servers_list):
+            if entry["port"] == port:
+                self.servers_list.pop(idx)
+                return
+
+    def tick(self, *dt):
+        self.dots = (self.dots + 1) % 4
 
     def handler(self, server_name, server_port):
         if self.client.request_game(server_port, self):
-            if self.during_ticking is not None:
-                self.during_ticking.cancel()
-            self.during_waiting = JoinPopup(self, server_name, server_port, Settings.client_frequency).open()
+            self.joining = JoinPopup(self, server_name, server_port).open()
         else:
             ErrorPopup("Server error", "Unable to connect to a server.").open()
         
@@ -174,11 +179,11 @@ class GameScreen(Screen, MyScreen):
             self.keyboard.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
 
         self.cache_streak = 0
-        self.during_game = None
-        self.during_countdown = None
+        self.game = None
+        self.countdown = None
         self.reseting_players = None
         self.serving = None
-        self.events = [self.during_game, self.during_countdown, self.reseting_players, self.serving]
+        self.events = [self.game, self.countdown, self.reseting_players, self.serving]
     
     def set_up(self, opt):
         self.opt = opt
@@ -209,11 +214,11 @@ class GameScreen(Screen, MyScreen):
     def start_countdown(self, target, duration=3):  
         self.streak = duration
         self.cc = True
-        self.during_countdown = Clock.schedule_interval(partial(self.countdown, target), 1)
+        self.countdown = Clock.schedule_interval(partial(self.countdown, target), 1)
 
     def countdown(self, callback, *dt):
         if self.streak == 0:
-            self.during_countdown.cancel()
+            self.countdown.cancel()
             self.cc = False
             callback()
         else:
@@ -222,24 +227,24 @@ class GameScreen(Screen, MyScreen):
     def pause(self):
         if self.gg:
             self.gg = False
-            self.during_game.cancel()
+            self.game.cancel()
         if self.cc:
             self.cc = False
-            self.during_countdown.cancel()
+            self.countdown.cancel()
         self.cache_streak = self.streak
 
     def unpause(self):
         if self.started:
             self.streak = self.cache_streak
             self.gg = True
-            self.during_game = self.schedule_game()
+            self.game = self.schedule_game()
         else:
             self.start()
 
     def serve_ball(self, direction, rotate=60, *dt):  
         self.ball.center = self.center
         self.ball.velocity = Vector(direction * self.height * Settings.speed, 0).rotate(randint(-rotate, rotate))
-        self.during_game = self.schedule_game()
+        self.game = self.schedule_game()
         self.gg = True
 
     def on_key_down(self, keyboard, keycode, text, modifiers):
@@ -303,7 +308,7 @@ class GameScreen(Screen, MyScreen):
             self.turn_end(self.player1, -1)
 
     def turn_end(self, winner, direction):
-        self.during_game.cancel()
+        self.game.cancel()
         self.gg = False
         winner.reward()
         self.streak = 0

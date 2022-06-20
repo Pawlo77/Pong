@@ -43,35 +43,70 @@ class HoverableButton(Button):
 
 
 class TickingPopup(Popup):
-    name = StringProperty("")
-    def __init__(self, root, name, port, interval, **kwargs):
-        super(TickingPopup, self).__init__(**kwargs)
-        self.name = name
-        self.port = port
-        self.root = root
-        self.interval = interval
-        self.countdown = Clock.schedule_interval(self.alive, 1)
+    exit_text = StringProperty("Back")
+    title = StringProperty("Ticking Popup")
+    time = NumericProperty(10)
 
     def alive(self, *dt):
         self.time -= 1
-
         if self.time <= 0:
             self.back_up()
-        
+
     def back_up(self):
         self.countdown.cancel()
         self.dismiss()
-        self.root.during_ticking = Clock.schedule_interval(self.root.tick, self.interval)
-        
+
+    def open(self, **kwargs):
+        super(TickingPopup, self).open(**kwargs)
+        self.countdown = Clock.schedule_interval(self.alive, 1)
+
 
 class AcceptPopup(TickingPopup):
-    title = "Accept player"
-    time = NumericProperty(Settings.accept_timeout)
+    client_name = StringProperty("")
+
+    def __init__(self, client_name, client_port, conn, root, **kwargs):
+        super(AcceptPopup, self).__init__(**kwargs)
+        self.client_name = client_name
+        self.client_port = client_port
+        self.conn = conn
+        self.root = root
+        self.title = "Accept a game"
+        self.time = Settings.accept_timeout
+
+    def alive(self, *dt):
+        super(AcceptPopup, self).alive(*dt)
+        if self.root.server.get_client(self.client_port) is None:
+            self.back_up()
+            ErrorPopup("Server error", "Connection to {self.client_name} lost.").open()
+
+    def accept(self):
+        self.root.server.accept()
+        self.back_up()
+        if self.root.server.playing:
+            if self.root.ticking is not None: # Here we can't reset, we still need the server
+                self.root.ticking.cancel() 
+            self.root.manager.current = "game"
+        else:
+            ErrorPopup("Server error", "Unable to connect to {self.client_name}.").open()
 
 
 class JoinPopup(TickingPopup):
-    title = "Joining a server"
-    time = NumericProperty(Settings.joining_timeout)
+    def __init__(self, root, **kwargs):
+        super(JoinPopup, self).__init__(**kwargs)
+        self.root = root
+        self.exit_text = "Abandon"
+        self.title = "Joining a game..."
+        self.time = Settings.joining_timeout
+
+    def back_up(self):
+        super(JoinPopup, self).back_up()
+        self.root.abandon()
+        self.root.ticking = Clock.schedule_interval(self.root.tick, 1)
+
+    def abort(self, positive=False):
+        super(JoinPopup, self).back_up()
+        if not positive:
+            self.root.ticking = Clock.schedule_interval(self.root.tick, 1)
 
 
 class ErrorPopup(Popup):

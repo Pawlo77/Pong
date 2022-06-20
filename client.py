@@ -1,54 +1,51 @@
-import socket
-import json
 from _thread import *
 import time
-from tkinter import SE
 
 from settings import *
 from widgets import ErrorPopup
+from internet import Internet
 
 
-class Client:
+class Client(Internet):
     def __init__(self):
         self.reset(True)
 
-    def create(self, client_name):
-        self.client_name = client_name
-        self.scanning = True
-        start_new_thread(self.listen, ())
-
     def reset(self, initial=False):
-        Settings.inform(f"Client resetting.")
-        if not initial and self.socket_ is not None:
-            self.shutdown(self.socket_)
-            Settings.inform(f"Connection to {self.port} closed.")
+        if initial:
+            Settings.inform(f"Setting up a client.")
+        else:
+            Settings.inform(f"Resetting a client.")
+            
+            if self.socket_ is not None:
+                self.shutdown(self.socket_)
+
+        self.screen = None
+        self.client_name = ""
         self.socket_ = None
         self.port = None
-        self.waiting = None
-        self.rooms = {}
-        self.game = False
-        self.scanning = False
-        self.client_name = None
+        self.rooms = [None] * Settings.rooms_num
+        self.playing = False
+        self.listening = False
+        self.waiting = False
 
-    def shutdown(self, obj):
+    def initialize(self, client_name, screen):
+        Settings.inform("Initializing the client")
+        self.screen = screen
+        self.client_name = client_name
+        self.start_listening()
+
+    def shutdown(self, port):
         try:
-            obj.shutdown(socket.SHUT_RDWR)
+            idx = Settings.default_port - port
+            self.rooms[idx].close()
         except Exception as e:
             Settings.handle_error(e)
+        self.rooms[idx] = None
 
-    def get_socket_(self, port):
-        try:
-            socket_ = socket.socket()
-            socket_.settimeout(Settings.server_timeout)
-            socket_.connect((Settings.host, port))
-        except Exception as e:
-            Settings.handle_error(e)
-            return None
-        return socket_
+    def request_game(self, port):
+        socket_ = self.rooms[Settings.default_port - port]
 
-    def request_game(self, port, root):
-        socket_ = self.get_socket_(port)
-        if socket_:
+        if socket_ is not None:
             data = REQUEST_GAME.copy()
             data["client_name"] = self.client_name
 
@@ -59,28 +56,30 @@ class Client:
                     self.socket_ = socket_
                     self.port = port
                     self.waiting = True
-                    start_new_thread(self.wait_for_game, (root, ))
+                    self.listening = False
+                    start_new_thread(self.wait_for_game, ())
                     return True
         return False
 
     def abandon(self):
         self.send(self.socket_, ABORT_WAITING)
         self.waiting = False
+        self.start_listening()
 
-    def wait_for_game(self, root):
+    def wait_for_game(self):
         t0 = time.time()
         while self.waiting:
             time.sleep(Settings.client_frequency)
             t1 = time.time()
-            if self.send(self.socket_, REQUEST_GAME):
+            if self.send(self.socket_, WAITING):
                 data = self.recive(self.socket_)
 
-                if data == REQEST_ACCEPTED:
+                if data == REQUEST_ACCEPTED:
                     self.waiting = False
-                    self.scanning = False
-                    root.during_waiting.back_up()
+                    self.listening = False
+                    self.playing = True
+                    self.screen.joining.abort(True)
                     Settings.inform(f"Server {self.port} accepted a game.")
-                    self.game = True
 
                 elif data == REQUEST_RECIVED:
                     t0 = t1
@@ -89,76 +88,55 @@ class Client:
                 elif data == REQUEST_DENIED:
                     self.shutdown(self.socket_) 
                     self.waiting = False
-                    root.during_waiting.back_up()
+                    self.screen.joining.abort()
                     ErrorPopup("Server busy", "Server started another game.").open()
                     Settings.inform(f"Server {self.port} started anorher game")
                             
             if t1 - t0 > 10:
                 self.shutdown(self.socket_)
                 self.waiting = False
-                print(root)
-                root.during_waiting.back_up()
+                self.screen.joining.abort()
                 ErrorPopup("Server error", "Server lost.").open()
                 Settings.inform("Server {self.port} lost.")
 
-    def send(self, socket_, data):
-        data = json.dumps(data).encode(Settings.encoding)
-        
-        try:
-            socket_.send(data)
-        except Exception as e:
-            Settings.handle_error(e)
-            return False
-        return True
+    # test if binded server is open. If yes, return its name
+    def test_socket(self, socket_): 
+        if socket_ is not None:
+            if self.send(socket_, ALIVE):
+                data = self.recive(socket_)
 
-    def recive(self, socket_):
-        try:
-            data = socket_.recv(Settings.conn_data_limit).decode(Settings.encoding)
+                if "server_name" in data:
+                    server_name = data["server_name"]
+                    del data["server_name"]
 
-            if data:
-                return json.loads(data)
-        except Exception as e:
-            Settings.handle_error(e)
-        return {}
+                    if data == all: # server is open
+                        return server_name
+        return None
+
+    def start_listening(self):
+        self.listening = True 
+        start_new_thread(self.listen, ())        
 
     def listen(self):
-        while self.scanning:
+        while self.listening:
+            for idx, socket_ in enumerate(self.rooms):
+                port = Settings.default_port + idx
+                if socket_ is not None:
+                    server_name = self.test_socket(socket_)
+                    if server_name is not None:
+                        Settings.inform(f"Connection to {port} is still open.")
+
+                    else: # server lost, 
+                        self.shutdown(port) 
+                        self.screen.remove_server(port)
+                        Settings.inform(f"Lost connection to {port}.")
+
+                else:
+                    socket_ = self.get_socket_(port)
+                    server_name = self.test_socket(socket_)
+                    if server_name is not None: # new server found
+                        Settings.inform(f"New connection found at {port}.")
+                        self.rooms[idx] = socket_
+                        self.screen.add_server(server_name, port)                                
+            
             time.sleep(Settings.client_frequency)
-
-            port = Settings.default_port
-            while port < Settings.default_port + Settings.max_rooms_num:
-                Settings.inform(f"Scanning at port {port}.")
-                connection = False
-                
-                socket_ = self.get_socket_(port)
-                if socket_:
-                    if self.send(socket_, ALIVE):
-                        data = self.recive(socket_)
-
-                        if "server_name" in data:  # if it is telling us about itself
-                            server_name = data["server_name"]
-                            del data["server_name"]
-
-                            if data == all: # if rest of the flags are correct
-                                connection = True
-                    self.shutdown(socket_)
-
-                if connection and port not in self.rooms: # if new connection found
-                    self.rooms[port] = server_name
-                    Settings.inform(f"Server found at {port}.")
-                elif not connection and port in self.rooms: # if old connection lost
-                    del self.rooms[port]
-                    Settings.inform(f"Server lost at {port}.")
-
-                port += 1
-
-
-
-# client = Client()
-# client.thread_update()
-
-# for i in range(10): 
-#     time.sleep(5)
-#     print(client.rooms)
-
-# client.thread_.exit()

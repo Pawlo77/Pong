@@ -1,6 +1,3 @@
-import os
-
-
 class Settings():
     fps = 60.
     speed = 0.01
@@ -16,12 +13,14 @@ class Settings():
 
     default_port = 8000
     host = "localhost"
-    max_rooms_num = 20
+    rooms_num = 20
     conn_data_limit = 1024
-    server_timeout = 5
+
+    connection_timeout = 10
     accept_timeout = 10
     waiting_timeout = 180
     joining_timeout = 180
+
     client_frequency = 5
     server_frequency = 2
     encoding = "utf-8"
@@ -38,6 +37,7 @@ class Settings():
         if Settings.verbose:
             print(msg)
 
+
 all = {
     "conn_key": Settings.conn_key
 }
@@ -47,7 +47,7 @@ ALIVE = {
     **all
 }
 REQUEST_GAME = {
-    "game": True,
+    "ok": True,
     **all
 }
 
@@ -56,12 +56,17 @@ REQUEST_RECIVED = {
     **all
 }
 
+WAITING = {
+    "waiting": True,
+    **all
+}
+
 ABORT_WAITING = {
     "bye": True,
     **all
 }
 
-REQEST_ACCEPTED = {
+REQUEST_ACCEPTED = {
     "allowed": True,
     **all
 }
