@@ -68,35 +68,35 @@
     auto_dismiss: False
     title_size: max(min(self.height / 10, self.width / 20), 1)
 
-<TickingPopup>
-    OptionButton:
-        font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
-        size_hint: (0.4, 0.2)
-        pos_hint: {"y": 0, "x": 0}
-        text: root.exit_text
-        on_press: 
-            root.back_up()
+<AcceptPopup>:
 
-<AcceptPopup>:     
     FloatLayout:        
         DefaultLabel:
             font_size: max(min(self.height / 3, self.width / 5), 1)
             size_hint: (0.8, 0.5)
             pos_hint: {"y": 0.5, "center_x": 0.5}
-            text: "Are sure you want to play against " + root.client_name + " ?"
+            text: root.main_text
         
         DefaultLabel:
             size_hint: (0.8, 0.3)
             pos_hint: {"y": 0.2, "center_x": 0.5}
-            text: "Decide in " + str(root.time) + " seconds..."
+            text: root.minor_text
 
         OptionButton:
             font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
             size_hint: (0.5, 0.2)
             pos_hint: {"y": 0, "right": 1}
-            text: "Play"
+            text: root.btn_text
             on_press: 
                 root.accept()
+
+        OptionButton:
+            font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
+            size_hint: (0.4, 0.2)
+            pos_hint: {"y": 0, "x": 0}
+            text: root.exit_text
+            on_press: 
+                root.back_up()
 
 
 <JoinPopup>:
@@ -107,6 +107,13 @@
             pos_hint: {"y": 0.5, "center_x": 0.5}
             text: "Waiting for host to accept" + root.time % 4 * "."
 
+        OptionButton:
+            font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
+            size_hint: (0.4, 0.2)
+            pos_hint: {"y": 0, "x": 0}
+            text: root.exit_text
+            on_press: 
+                root.back_up()
 
 <ErrorPopup>:
     FloatLayout:        

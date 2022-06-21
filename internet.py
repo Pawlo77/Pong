@@ -33,3 +33,9 @@ class Internet:
         except Exception as e:
             Settings.handle_error(e)
         return {}
+
+    def shutdown(self, obj):
+        try:
+            obj.close()
+        except Exception as e:
+            Settings.handle_error(e)

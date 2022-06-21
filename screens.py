@@ -66,7 +66,6 @@ class ServerScreen(Screen, MyScreen):
         else:
             self.server = Server()
         self.dots = 0
-        self.accepting = None
         self.clients_list = []
         self.time = Settings.waiting_timeout
 
@@ -104,7 +103,7 @@ class ServerScreen(Screen, MyScreen):
 
         if data is not None:
             conn, client_port, _ = data
-            self.accepting = AcceptPopup(self, client_name, client_port, conn, self).open()
+            AcceptPopup(client_name, client_port, conn, self).open()
 
 
 class ClientScreen(Screen, MyScreen):
@@ -126,7 +125,6 @@ class ClientScreen(Screen, MyScreen):
             self.client = Client()
         self.dots = 0
         self.servers_list = []
-        self.joining = None
 
     def initialize(self, client_name):
         self.reset()
@@ -148,8 +146,8 @@ class ClientScreen(Screen, MyScreen):
         self.dots = (self.dots + 1) % 4
 
     def handler(self, server_name, server_port):
-        if self.client.request_game(server_port, self):
-            self.joining = JoinPopup(self, server_name, server_port).open()
+        if self.client.request_game(server_port):
+            JoinPopup(server_name, self).open()
         else:
             ErrorPopup("Server error", "Unable to connect to a server.").open()
         

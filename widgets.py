@@ -51,6 +51,7 @@ class TickingPopup(Popup):
         self.time -= 1
         if self.time <= 0:
             self.back_up()
+            return
 
     def back_up(self):
         self.countdown.cancel()
@@ -63,6 +64,9 @@ class TickingPopup(Popup):
 
 class AcceptPopup(TickingPopup):
     client_name = StringProperty("")
+    main_text = StringProperty("")
+    minor_text = StringProperty("")
+    btn_text = StringProperty("")
 
     def __init__(self, client_name, client_port, conn, root, **kwargs):
         super(AcceptPopup, self).__init__(**kwargs)
@@ -72,39 +76,78 @@ class AcceptPopup(TickingPopup):
         self.root = root
         self.title = "Accept a game"
         self.time = Settings.accept_timeout
+        self.waiting = False
+        self.main_text = f"Are sure you want to play against {client_name} ?"
+        self.minor_text = f"Decide in {self.time} seconds..."
+        self.btn_text = "Play"
 
     def alive(self, *dt):
         super(AcceptPopup, self).alive(*dt)
+        if self.waiting and self.root.server.playing:
+            print("DADADADA")
+            self.root.ticking.cancel()
+            self.root.manager.current = "game"
+            super().back_up()
+        elif self.waiting:
+            self.minor_text = f"Timeout in {self.time} seconds..."
+            self.btn_text = "".join(["." for _ in range(self.time % 4)])
+        else:
+            self.minor_text = f"Decide in {self.time} seconds..."
+
         if self.root.server.get_client(self.client_port) is None:
             self.back_up()
-            ErrorPopup("Server error", "Connection to {self.client_name} lost.").open()
+            ErrorPopup("Server error", f"Connection to {self.client_name} lost.").open()
+            return
+        
+        f = False
+        for data in self.root.clients_list:
+            if data["port"] == self.client_port:
+                f = True
+                break
+        if not f:
+            ErrorPopup("Player resigned", f"{self.client_name} no longer in your lobby.").open()
+            self.back_up()
+            return
+
+    def back_up(self):
+        if self.waiting:
+            ErrorPopup("Server error", f"Unable to connect to {self.client_name}.").open()
+        super().back_up()
 
     def accept(self):
-        self.root.server.accept()
-        self.back_up()
-        if self.root.server.playing:
-            if self.root.ticking is not None: # Here we can't reset, we still need the server
-                self.root.ticking.cancel() 
-            self.root.manager.current = "game"
-        else:
-            ErrorPopup("Server error", "Unable to connect to {self.client_name}.").open()
+        self.root.server.accept(self.conn, self.client_port)
+        self.root.time = max(6, self.root.time) # make sure it won't quit during waitng
+        self.time = 10 # 5 seconds to establish connection
+        self.main_text = f"Waiting for a connection with {self.client_name}"
+        self.minor_text = f"Timeout in {self.time} seconds..."
+        self.btn_text = ""
 
 
 class JoinPopup(TickingPopup):
-    def __init__(self, root, **kwargs):
+    def __init__(self, server_name, root, **kwargs):
         super(JoinPopup, self).__init__(**kwargs)
         self.root = root
         self.exit_text = "Abandon"
-        self.title = "Joining a game..."
+        self.title = f"Joining a game of {server_name}..."
         self.time = Settings.joining_timeout
 
     def back_up(self):
-        super(JoinPopup, self).back_up()
-        self.root.abandon()
+        super().back_up()
+        self.root.client.abandon = True
         self.root.ticking = Clock.schedule_interval(self.root.tick, 1)
 
+    def alive(self, *dt):
+        super().alive(*dt)
+        if not self.root.client.waiting:
+            if not self.root.client.playing:
+                self.abort()
+                ErrorPopup("Server error", "Server lost.").open()
+            else:
+                self.abort(True)
+            return
+
     def abort(self, positive=False):
-        super(JoinPopup, self).back_up()
+        super().back_up()
         if not positive:
             self.root.ticking = Clock.schedule_interval(self.root.tick, 1)
 

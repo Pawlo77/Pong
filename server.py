@@ -1,6 +1,7 @@
 from _thread import *
 import time
 import socket
+from tracemalloc import start
 
 from settings import *
 from internet import Internet
@@ -52,20 +53,18 @@ class Server(Internet):
 
             port += 1
 
-    def shutdown(self, obj):
-        try:
-            obj.close()
-        except Exception as e:
-            Settings.handle_error(e)
-
     def accept(self, conn, port):
-        if self.send(conn, REQUEST_ACCEPTED):
-            Settings.inform("Game from {port} accepted.")
-            self.playing = True
-            self.listening = False
+        def accept_helper(conn, port):
+            if self.send(conn, REQUEST_ACCEPTED):
+                data = self.recive(conn)
+                if data == REQUEST_RECIVED:
+                    Settings.inform(f"Game from {port} accepted.")
+                    self.playing = True
+                    self.listening = False
+        start_new_thread(accept_helper, (conn, port))
 
     def get_client(self, client_port):
-        for (conn, port, lastConn) in self.server.clients:
+        for (conn, port, lastConn) in self.clients:
             if port == client_port: 
                 return conn, port, lastConn
         return None
@@ -85,8 +84,12 @@ class Server(Internet):
                     continue
 
                 data = self.recive(conn)
+                if not self.listening: return # if server closed during conn recive timeout
+
+                response = {"server_name": self.server_name, **REQUEST_RECIVED}
+
                 if data == ALIVE:
-                    if self.send(conn, REQUEST_RECIVED):
+                    if self.send(conn, response):
                         self.clients[idx] = [conn, port, t]
                         Settings.inform(f"Connection with client {port} renewed.")
                         continue
@@ -98,11 +101,10 @@ class Server(Internet):
                         continue
   
                 elif data == ABORT_WAITING:
-                    if self.send(conn, REQUEST_RECIVED):
-                        self.remove(conn, idx, port)
-                        self.clients[idx] = [conn, port, t]
-                        Settings.inform(f"Client {port} aborted.")
-                        continue
+                    self.screen.remove_client(port)
+                    self.clients[idx] = [conn, port, t]
+                    Settings.inform(f"Client {port} aborted.")
+                    continue
                 
                 elif "client_name" in data:
                     client_name = data["client_name"]
@@ -117,7 +119,7 @@ class Server(Internet):
 
                 self.remove(conn, idx, port)
                 Settings.inform(f"Connection with {port} lost.")   
-                time.sleep(Settings.server_frequency)
+            time.sleep(Settings.server_frequency)
 
     def listen(self):
         while self.listening:
@@ -125,7 +127,7 @@ class Server(Internet):
             data = self.recive(conn)
 
             if data == ALIVE:
-                data = {"server_name": self.server_name, **all}
+                data = {"server_name": self.server_name, **REQUEST_RECIVED}
                 if self.send(conn, data):
                     Settings.inform(f"New connection from {address[1]}.")
                     self.clients.append([conn, address[1], time.time()])

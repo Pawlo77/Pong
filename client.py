@@ -1,4 +1,5 @@
 from _thread import *
+from kivy.clock import Clock
 import time
 
 from settings import *
@@ -17,7 +18,7 @@ class Client(Internet):
             Settings.inform(f"Resetting a client.")
             
             if self.socket_ is not None:
-                self.shutdown(self.socket_)
+                super().shutdown(self.socket_)
 
         self.screen = None
         self.client_name = ""
@@ -27,6 +28,7 @@ class Client(Internet):
         self.playing = False
         self.listening = False
         self.waiting = False
+        self.abandon = False
 
     def initialize(self, client_name, screen):
         Settings.inform("Initializing the client")
@@ -35,8 +37,8 @@ class Client(Internet):
         self.start_listening()
 
     def shutdown(self, port):
+        idx = Settings.default_port - port
         try:
-            idx = Settings.default_port - port
             self.rooms[idx].close()
         except Exception as e:
             Settings.handle_error(e)
@@ -46,8 +48,7 @@ class Client(Internet):
         socket_ = self.rooms[Settings.default_port - port]
 
         if socket_ is not None:
-            data = REQUEST_GAME.copy()
-            data["client_name"] = self.client_name
+            data = {"client_name": self.client_name, **REQUEST_GAME}
 
             if self.send(socket_, data):
                 data = self.recive(socket_)
@@ -59,45 +60,54 @@ class Client(Internet):
                     self.listening = False
                     start_new_thread(self.wait_for_game, ())
                     return True
-        return False
-
-    def abandon(self):
-        self.send(self.socket_, ABORT_WAITING)
-        self.waiting = False
-        self.start_listening()
+        return False  
 
     def wait_for_game(self):
         t0 = time.time()
         while self.waiting:
-            time.sleep(Settings.client_frequency)
             t1 = time.time()
+
+            if self.abandon:
+                if self.send(self.socket_, ABORT_WAITING):
+                    Settings.inform(f"Abandoned waiting for {self.port}.")
+                self.waiting = False
+                self.abandon = False
+                self.start_listening()
+                return
+
             if self.send(self.socket_, WAITING):
                 data = self.recive(self.socket_)
+                if not self.waiting: return # if we abandoned during data recive
 
                 if data == REQUEST_ACCEPTED:
-                    self.waiting = False
-                    self.listening = False
-                    self.playing = True
-                    self.screen.joining.abort(True)
-                    Settings.inform(f"Server {self.port} accepted a game.")
+                    if self.send(self.socket_, REQUEST_RECIVED):
+                        self.waiting = False
+                        self.listening = False
+                        self.playing = True
+                        self.screen.ticking.cancel()
+                        self.screen.manager.screen = "game"
+                        Settings.inform(f"Server {self.port} accepted a game.")
+                        return
 
                 elif data == REQUEST_RECIVED:
                     t0 = t1
                     Settings.inform(f"Waiting for game from {self.port}.")
 
                 elif data == REQUEST_DENIED:
-                    self.shutdown(self.socket_) 
+                    super().shutdown(self.socket_) 
                     self.waiting = False
-                    self.screen.joining.abort()
                     ErrorPopup("Server busy", "Server started another game.").open()
                     Settings.inform(f"Server {self.port} started anorher game")
+                    return
                             
             if t1 - t0 > 10:
-                self.shutdown(self.socket_)
+                super().shutdown(self.socket_)
                 self.waiting = False
-                self.screen.joining.abort()
-                ErrorPopup("Server error", "Server lost.").open()
+                self.start_listening()
                 Settings.inform("Server {self.port} lost.")
+                return
+
+            time.sleep(Settings.client_frequency)
 
     # test if binded server is open. If yes, return its name
     def test_socket(self, socket_): 
@@ -109,7 +119,7 @@ class Client(Internet):
                     server_name = data["server_name"]
                     del data["server_name"]
 
-                    if data == all: # server is open
+                    if data == REQUEST_RECIVED: # server is open
                         return server_name
         return None
 
