@@ -20,7 +20,12 @@ class MyScreen():
 
 
 class MenuScreen(Screen, MyScreen):
-    pass
+    
+    def abort(self):
+        game = self.manager.get_screen("game")
+
+        if game.internet is not None:
+            game.internet.abandon = True
 
 
 class ConnectScreen(Screen, MyScreen):
@@ -84,15 +89,15 @@ class ServerScreen(Screen, MyScreen):
     def add_action(self, name, data):
         self.actions.append((name, data))
 
-    def remove_client(self, port):
+    def remove_client(self, address):
         for idx, entry in enumerate(self.clients_list):
-            if entry["port"] == port:
+            if entry["address"] == address:
                 self.clients_list.pop(idx)
                 return
 
-    def add_client(self, client_name, port):
+    def add_client(self, client_name, client_address):
         self.clients_list.append({
-            "text": client_name, "port": port, "root": self
+            "text": client_name, "address": client_address, "root": self
         })
 
     def tick(self, *dt):
@@ -122,8 +127,8 @@ class ServerScreen(Screen, MyScreen):
                 self.manager.current = "game"
                 self.manager.current_screen.set_up("server", data)
 
-    def handler(self, client_name, client_port):
-        self.accept = AcceptPopup(client_name, client_port, self)
+    def handler(self, client_name, client_address):
+        self.accept = AcceptPopup(client_name, client_address, self)
         self.accept.open()
 
 
@@ -159,14 +164,14 @@ class ClientScreen(Screen, MyScreen):
     def add_action(self, name, data):
         self.actions.append((name, data))
 
-    def add_server(self, server_name, port):
+    def add_server(self, server_name, server_address):
         self.servers_list.append({
-            "text": server_name, "port": port, "root": self
+            "text": server_name, "address": server_address, "root": self
         })
 
-    def remove_server(self, port):
+    def remove_server(self, server_address):
         for idx, entry in enumerate(self.servers_list):
-            if entry["port"] == port:
+            if entry["address"] == server_address:
                 self.servers_list.pop(idx)
                 return
 
@@ -186,14 +191,14 @@ class ClientScreen(Screen, MyScreen):
                 ErrorPopup(*data).open()
             elif name == "START":
                 self.ticking.cancel() # we can't reset here, client will be lost
-                self.join.back_up()
+                self.join.back_up(False)
                 self.manager.transition.duration = Settings.transition_duration
                 self.manager.transition.direction = "up"
                 self.manager.current = "game"
                 self.manager.current_screen.set_up("client", data)
 
-    def handler(self, server_name, server_port):
-        self.client.request_game(server_port)
+    def handler(self, server_name, server_address):
+        self.client.request_game(server_address)
         self.join = JoinPopup(server_name, self)
         self.join.open()
         
@@ -242,8 +247,6 @@ class GameScreen(Screen, MyScreen):
             for event in self.events:
                 if event is not None:
                     event.cancel()
-            if self.internet is not None:
-                self.internet.reset()
             self.reset_players()
             self.keyboard.unbind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
 
@@ -287,7 +290,13 @@ class GameScreen(Screen, MyScreen):
     def tick(self, *dt):
         while len(self.actions):
             name, data = self.actions.pop(0)
-            if name == "START":
+            if name == "ERROR": # client left or has been lost
+                ErrorPopup(*data).open()
+            elif name == "RESET":
+                self.manager.current = "menu"
+                self.manager.get_screen(self.internet.type_).reset()
+                self.reset()
+            elif name == "START":
                 self.started = True
                 self.ball.center = self.center
                 self.add_action("SERVE BALL", (choice([-1, 1]), 60))

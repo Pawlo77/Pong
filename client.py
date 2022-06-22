@@ -1,5 +1,6 @@
 from _thread import *
 import time
+import socket
 
 from settings import *
 from internet import Internet
@@ -13,180 +14,182 @@ class Client(Internet):
     def reset(self, initial=False):
         if initial:
             Settings.inform(f"Setting up a client.")
-            self.rooms = [None] * Settings.rooms_num
         else:
             Settings.inform(f"Resetting a client.")
-            for idx in range(Settings.rooms_num):
-                self.shutdown(idx + Settings.default_port)
+
+        self.rooms = {}
+        self.server_address = None
+        self.client_name = ""
+        self.socket_ = None
+        self.working = False
+        self.frequency = Settings.server_frequency
 
         self.screen = None
-        self.client_name = ""
-        self.port = None
-        self.playing = False
         self.listening = False
+        self.playing = False
         self.waiting = False
-        self.abandon = False
+        self.abandon_ = False
 
     def initialize(self, client_name, screen):
         Settings.inform("Initializing the client")
         self.screen = screen
         self.client_name = client_name
-        self.start_listening()
-
-    def start_listening(self):
         self.listening = True
-        for idx in range(Settings.rooms_num):
-            start_new_thread(self.listen, (idx, ))
 
-    def shutdown(self, port):
-        idx = Settings.default_port - port
-        try:
-            if self.rooms[idx] is not None:
-                self.rooms[idx].close()
-        except Exception as e:
-            Settings.handle_error(e)
-        self.rooms[idx] = None
+        self.socket_ = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.working = True
+        start_new_thread(self.listen, ())
+        start_new_thread(self.seek, ())
+
+    def recive(self):
+        data, _ = super().recive(self.socket_)
+        return data
 
     def request_game(self, port):
         self.port = port
+
+    def abandon(self):
+        self.abandon_ = True
         
     # test if binded server is open. If yes, return its name
-    def test_socket(self, socket_): 
-        if socket_ is not None:
-            if self.send(socket_, ALIVE):
-                data = self.recive(socket_)
+    def test_server(self, address): 
+        if self.send(self.socket_, ALIVE, address):
+            data = self.recive()
+            print(data)
 
-                if "server_name" in data:
-                    server_name = data["server_name"]
-                    del data["server_name"]
+            if "server_name" in data:
+                server_name = data["server_name"]
+                del data["server_name"]
 
-                    if data == REQUEST_RECIVED: # server is open
-                        return server_name
+                if data == REQUEST_RECIVED: # server is open
+                    return server_name
         return None
 
-    def queue_action(self, port, inf):
-        if not inf:
-            self.screen.actions.append(("REMOVE", port))
-        elif inf == "fatal":
-            self.screen.actions.append(("REMOVE", port))
-            self.screen.actions.append(("ERROR", ("Server error", "Unable to connect to a server.")))
-        elif inf == "busy":
-            self.screen.actions.append(("ERROR", ("Server is busy", "Server has already started a game.")))
+    def connection_error(self, is_server, address):
+        if self.playing and is_server:
+            self.screen.add_action("ERROR", ("Server lost", "Game crashed due to lost connection with a host"))
+            self.leave()
+            return
+        if self.waiting and is_server:
+            self.server_address = None
+            self.waiting = False
+            self.screen.add_action("STOP WAITING", ("Server Lost", "Unable to join the server."))
 
-    def listen(self, idx):
-        port = Settings.default_port + idx
-        refresh = Settings.conn_frequency
-        server_name = ""
+        self.screen.add_action("REMOVE", address)
+        del self.rooms[address]
+        return Settings.conn_frequency, ""
 
-        while self.listening or port == self.port:
-            socket_ = self.rooms[idx]
-            alive = False
-            error = ""
+    def listen_server(self, address, t0):
+        def send(data):
+            return self.send(self.socket_, data, address)
 
-            # we have some action with that server
-            if port == self.port:
-                t1 = time.time()
+        while self.listening or address == self.address:
+            is_server = address == self.server_address
+            t1 = time.time()
+            
+            if t0 is not None and t1 - t0 > Settings.connection_timeout:
+                Settings.inform(f"Connection timeout ({address}).")
+                refresh, server_name = self.connection_error(is_server, address)
+            
+            while len(self.rooms[address]):
+                alive = False
+                data = self.rooms[address].pop(0)
 
-                # connection to server lost
-                if socket_ is None:
-                    pass
+                # we have some action with that server
+                if is_server:
+                    if data == ABANDON:
+                        Settings.inform(f"Server {address} abandoned us.")
+                        if self.playing:
+                            self.screen.add_action("ERROR", ("Server lost", "Game crashed due to lost connection with a host"))
+                            self.leave()
+                        alive = send(REQUEST_RECIVED)
 
-                # connection timeout
-                elif (self.waiting or self.playing) and t1 - t0 > Settings.connection_timeout:
-                    Settings.inform(f"Connection timeout ({port}).")
+                    elif data == BUSY:
+                        Settings.inform(f"Server {address} started anorher game")
+                        self.waiting = False
+                        self.server_address = None
+                        self.screen.add_action("ERROR", ("Server is busy", "Server has already started a game."))
+                        alive = send(REQUEST_RECIVED)
 
-                elif self.abandon and self.port == port:
-                    if self.send(socket_, ABORT):
-                        if self.recive(socket_) == REQUEST_RECIVED:
-                            alive = True
-                    self.abandon = False
-                    self.waiting = False
-                    self.playing = False
-                    self.port = None
-                    refresh = Settings.conn_frequency
-                    Settings.inform(f"Abandoned actions with {port}.")
+                    if self.abandon_:
+                        Settings.inform(f"Abandoned actions with {address}.")
+                        if self.playing:
+                            self.leave()
+                            return
 
-                elif self.playing:
-                    alive = True
+                        alive = send(ABANDON)
+                        self.abandon_ = False
+                        self.waiting = False
+                        self.server_address = None
+                        refresh = Settings.conn_frequency
 
-                # request the game
-                elif not self.waiting:
-                    data = {"client_name": self.client_name, **REQUEST_GAME}
-                    Settings.inform(f"Requesting a game from {port}.")
-                
-                    if self.send(socket_, data):
-                        response = self.recive(socket_)
+                    elif self.playing:
+                        print("tick")
+                        alive = send(REQUEST_RECIVED)
 
+                    if self.waiting and data == GAME_ACCEPTED:
+                        Settings.inform(f"Starting the game with {address}")
+                        alive = send(GAME_START)
+                        self.waiting = False
+                        self.playing = True
+                        self.listening = False
+                        self.screen.add_action("START", self)
+                        refresh = 1. / Settings.fps
+
+                    # request the game
+                    elif not self.waiting:
+                        Settings.inform(f"Requesting a game from {address}.")
+                        data = {"client_name": self.client_name, **REQUEST_GAME}
+                        alive = send(data)
+
+                        response = self.recive()
                         if response == REQUEST_RECIVED:
-                            alive = True
                             self.waiting = True
-                            # t1 = time.time() # it will overwrite t0 at the end
-                            # refresh /= 4 # make things there smoother
+                            refresh /= 4 # make things there smoother
                             Settings.inform(f"Request recived.")
-
-                    if not alive:
-                        Settings.inform(f"Request failed.")
+                        else:
+                            Settings.inform(f"Request failed.")
                     
-                # contact server that we are waiting
+                    # contact server that we are still waiting
+                    elif response == REQUEST_RECIVED:
+                        Settings.inform(f"Waiting for game from {address}.")
+                        alive = send(WAITING)     
+
+                # we know that the server exists but we don't have an action with it
                 else:
-                    if self.send(socket_, WAITING):
-                        response = self.recive(socket_)
+                    server_name = self.test_server(address)
+                    if server_name is not None:
+                        Settings.inform(f"Connection to {address} is still open.")
+                        alive = True
 
-                        # server accepts a game
-                        if response == REQUEST_ACCEPTED:
-                            alive = True
-                            refresh = 1. / Settings.fps
-                            self.waiting = False
-                            self.listening = False
-                            self.playing = True
-                            Settings.inform(f"Server {port} accepted a game.")
-                            self.screen.add_action("START", self)
+                if not alive:
+                    Settings.inform(f"Unable to reach server {address}.")
+                    refresh, server_name = self.connection_error(is_server, address)
+                    return
+            t0 = t1
 
-                        elif response == REQUEST_RECIVED:
-                            alive = True
-                            Settings.inform(f"Waiting for game from {port}.")
+    def listen(self):
+        while self.working:
+            data, address = super().recive(self.socket_)
 
-                        elif response == BUSY:
-                            alive = True
-                            self.waiting = False
-                            self.port = None
-                            error = "busy"
-                            Settings.inform(f"Server {port} started anorher game")
+            print(data)
+            if Settings.allowed(address) and address in self.rooms:
+                    self.rooms[address].append(data)
 
-                if alive:
-                    t0 = t1 # reset timeout
+            time.sleep(self.frequency)
 
-            # if we know that the server exists but we don't have an action with it
-            elif socket_ is not None:
-                server_name = self.test_socket(socket_)
-                if server_name is not None:
-                    alive = True
-                    Settings.inform(f"Connection to {port} is still open.")
-                else:
-                    error = "" # silent removal
+    def seek(self):
+        while self.working:
+            for port in range(Settings.default_port, Settings.default_port + Settings.rooms_num):
+                address = (Settings.host, port)
 
-            else:
-                alive = True # don't call queue_action if server didn't existed nor was corelated to us
-                socket_ = self.get_socket_(port)
-                server_name = self.test_socket(socket_)
-
-                if server_name is not None: # new server found
-                    self.rooms[idx] = socket_
-                    self.screen.actions.append(("ADD", (server_name, port)))
-                    Settings.inform(f"New connection found at {port}.")
-        
-            if not alive:
-                self.shutdown(port) 
-                self.port = None
-                if self.waiting:
-                    self.screen.actions.append(("STOP WAITING", ("Server Lost", "Unable to join the server.")))
-                self.waiting = False
-                self.playing = False
-                self.abandon = False
-                refresh = Settings.conn_frequency
-                server_name = ""
-                self.queue_action(port, error)
-                Settings.inform(f"Server {port} lost.")
-            elif error:
-                self.queue_action(port, error)
-            time.sleep(refresh)
+                if address not in self.rooms:
+                    server_name = self.test_server(address)
+                    if server_name is not None:
+                        Settings.inform(f"New connection found at {address}.")
+                        self.screen.add_action("ADD", (server_name, address))
+                        self.rooms[address] = [] # queue for data from that server
+                        start_new_thread(self.listen_server, (address, time.time()))
+                    
+    def leave(self):
+        self.screen.add_action("RESET", None)

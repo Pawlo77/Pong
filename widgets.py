@@ -68,10 +68,10 @@ class AcceptPopup(TickingPopup):
     minor_text = StringProperty("")
     btn_text = StringProperty("")
 
-    def __init__(self, client_name, client_port, root, **kwargs):
+    def __init__(self, client_name, client_address, root, **kwargs):
         super(AcceptPopup, self).__init__(**kwargs)
         self.client_name = client_name
-        self.client_port = client_port
+        self.client_address = client_address
         self.root = root
         self.title = "Accept a game"
         self.time = Settings.accept_timeout
@@ -89,10 +89,10 @@ class AcceptPopup(TickingPopup):
             self.minor_text = f"Decide in {self.time} seconds..."
 
     def accept(self):
-        self.root.server.accept_game(self.client_port)
+        self.root.server.accept_game(self.client_address)
         self.root.time = max(10, self.root.time) # make sure server won't timeout during waiting
         self.time = max(10, self.time)
-        waiting = True
+        self.waiting = True
         self.main_text = f"Waiting for a connection with {self.client_name}"
         self.minor_text = f"Timeout in {self.time} seconds..."
         self.btn_text = "-"
@@ -109,11 +109,6 @@ class JoinPopup(TickingPopup):
     def back_up(self, abandon=True):
         super().back_up()
         self.root.client.abandon = abandon
-
-    # def abort(self, positive=False):
-    #     super().back_up()
-    #     if not positive:
-    #         self.root.ticking = Clock.schedule_interval(self.root.tick, 1)
 
 
 class ErrorPopup(Popup):

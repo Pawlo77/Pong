@@ -21,7 +21,7 @@
             width: self.height / 40
             points: self.x, self.y, self.x + self.width, self.y
     on_press:
-        self.root.handler(self.text, self.port)
+        self.root.handler(self.text, self.address)
 
 <DefaultLabel@Label>:
     font_size: max(min(self.height / 2, self.width / 5), 1)
