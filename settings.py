@@ -21,12 +21,12 @@ class Settings():
     waiting_timeout = 180
     joining_timeout = 180
 
-    client_frequency = 5
-    server_frequency = 2
+    conn_frequency = 3
+    server_frequency = 1
     encoding = "utf-8"
     conn_key = "7fZmv`UXa75@K7e$3+g@"
 
-    debug = True
+    debug = False
     verbose = True
 
     def handle_error(e): 
@@ -61,7 +61,7 @@ WAITING = {
     **all
 }
 
-ABORT_WAITING = {
+ABORT = {
     "bye": True,
     **all
 }
@@ -71,7 +71,7 @@ REQUEST_ACCEPTED = {
     **all
 }
 
-REQUEST_DENIED = {
+BUSY = {
     "allowed": False,
     **all
 }

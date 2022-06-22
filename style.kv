@@ -62,11 +62,11 @@
             pos: self.pos
             size: self.size
 
-
 <Popup>:
     size_hint: (0.6, 0.6)
     auto_dismiss: False
     title_size: max(min(self.height / 10, self.width / 20), 1)
+
 
 <AcceptPopup>:
 
@@ -387,7 +387,7 @@
         size_hint: (0.065, 0.075)
         text: "i"
         on_press:
-            root.pause()
+            root.add_action("PAUSE", None)
             root.manager.transition.duration = 0
             root.manager.current = "pause"
 
@@ -406,9 +406,7 @@
             text:
                 "Resume"
             on_press:
-                root.manager.transition.duration = 0
-                root.manager.current = "game"
-                root.manager.get_screen("game").start_countdown(root.manager.get_screen("game").unpause)
+                root.unpause()
 
         OptionButton:
             text:

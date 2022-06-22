@@ -57,16 +57,19 @@ class ServerScreen(Screen, MyScreen):
         self.reset(True)
 
     def reset(self, initial=False):
-        if not initial and self.ticking is not None:
-            self.ticking.cancel()
-        else:
-            self.ticking = None
         if not initial:
             self.server.reset()
+            if self.accept is not None:
+                self.accept.back_up()
+            if self.ticking is not None:
+                self.ticking.cancel()
         else:
             self.server = Server()
+            self.accept = None
+            self.ticking = None
         self.dots = 0
         self.clients_list = []
+        self.actions = [] # all must be O(1)
         self.time = Settings.waiting_timeout
 
     def initialize(self, server_name):
@@ -77,6 +80,9 @@ class ServerScreen(Screen, MyScreen):
             self.manager.current = "connect"
             ErrorPopup("Server error", "Unable to create server, try again later.").open()
             self.reset()
+
+    def add_action(self, name, data):
+        self.actions.append((name, data))
 
     def remove_client(self, port):
         for idx, entry in enumerate(self.clients_list):
@@ -98,12 +104,27 @@ class ServerScreen(Screen, MyScreen):
             ErrorPopup("Server closed", "Your server was closed bacause you exceeded connection time.").open()
             self.reset()
 
-    def handler(self, client_name, client_port):
-        data = self.server.get_client(client_port)
+        while len(self.actions):
+            name, data = self.actions.pop(0)
+            if name == "REMOVE":
+                self.remove_client(data)
+            elif name == "ADD":
+                self.add_client(*data)
+            elif name == "ERROR":
+                if self.accept is not None:
+                    self.accept.back_up()
+                ErrorPopup(*data).open()
+            elif name == "START":
+                self.ticking.cancel() # we can't reset here, server will be lost
+                self.accept.back_up()
+                self.manager.transition.duration = Settings.transition_duration
+                self.manager.transition.direction = "up"
+                self.manager.current = "game"
+                self.manager.current_screen.set_up("server", data)
 
-        if data is not None:
-            conn, client_port, _ = data
-            AcceptPopup(client_name, client_port, conn, self).open()
+    def handler(self, client_name, client_port):
+        self.accept = AcceptPopup(client_name, client_port, self)
+        self.accept.open()
 
 
 class ClientScreen(Screen, MyScreen):
@@ -121,15 +142,22 @@ class ClientScreen(Screen, MyScreen):
             self.ticking = None
         if not initial:
             self.client.reset()
+            if self.join is not None:
+                self.join.dismiss()
         else:
             self.client = Client()
+            self.join = None
         self.dots = 0
         self.servers_list = []
+        self.actions = [] # each action must be O(1)
 
     def initialize(self, client_name):
         self.reset()
         self.client.initialize(client_name, self)
         self.ticking = Clock.schedule_interval(self.tick, 1)
+
+    def add_action(self, name, data):
+        self.actions.append((name, data))
 
     def add_server(self, server_name, port):
         self.servers_list.append({
@@ -145,11 +173,29 @@ class ClientScreen(Screen, MyScreen):
     def tick(self, *dt):
         self.dots = (self.dots + 1) % 4
 
+        while len(self.actions):
+            name, data = self.actions.pop(0)
+            if name == "REMOVE":
+                self.remove_server(data)
+            elif name == "ADD":
+                self.add_server(*data)
+            elif name == "STOP WAITING":
+                self.join.back_up(False)
+                ErrorPopup(*data).open()
+            elif name == "ERROR":
+                ErrorPopup(*data).open()
+            elif name == "START":
+                self.ticking.cancel() # we can't reset here, client will be lost
+                self.join.back_up()
+                self.manager.transition.duration = Settings.transition_duration
+                self.manager.transition.direction = "up"
+                self.manager.current = "game"
+                self.manager.current_screen.set_up("client", data)
+
     def handler(self, server_name, server_port):
-        if self.client.request_game(server_port):
-            JoinPopup(server_name, self).open()
-        else:
-            ErrorPopup("Server error", "Unable to connect to a server.").open()
+        self.client.request_game(server_port)
+        self.join = JoinPopup(server_name, self)
+        self.join.open()
         
 
 class StatsScreen(Screen, MyScreen):
@@ -157,7 +203,13 @@ class StatsScreen(Screen, MyScreen):
 
 
 class PauseScreen(Screen, MyScreen):
-    pass
+    
+    def unpause(self):
+        self.manager.transition.duration = 0
+        self.manager.current = "game"
+        
+        game = self.manager.current_screen
+        game.add_action("COUNTDOWN", ((game.add_action, "UNPAUSE", None), 3))
 
 
 class GameScreen(Screen, MyScreen):
@@ -171,20 +223,44 @@ class GameScreen(Screen, MyScreen):
 
     def __init__(self, **kwargs):
         super(GameScreen, self).__init__(**kwargs)
+        self.reset(True)
 
-        self.keyboard = Window.request_keyboard(None, self)
-        if self.keyboard:
-            self.keyboard.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
+    def reset(self, initial=False):
+        Settings.inform(f"Resetting the game ({initial}).")
+        if initial:
+            self.keyboard = Window.request_keyboard(None, self)
+            self.ticking = None
+            self.playing = None
+            self.reseting_players = None
+            self.counting = None
+            self.serving = None
+            self.internet = None # client or server handling connections 
+            self.events = [self.ticking, self.playing, self.counting, self.serving, self.reseting_players]
+        else:
+            for player in self.players: 
+                player.score = 0
+            for event in self.events:
+                if event is not None:
+                    event.cancel()
+            if self.internet is not None:
+                self.internet.reset()
+            self.reset_players()
+            self.keyboard.unbind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
 
+        self.started = False
+        self.cc = self.gg = False
         self.cache_streak = 0
-        self.game = None
-        self.countdown = None
-        self.reseting_players = None
-        self.serving = None
-        self.events = [self.game, self.countdown, self.reseting_players, self.serving]
-    
-    def set_up(self, opt):
+        self.actions = [] # all must be O(1)
+
+    def reset_players(self, *dt):
+        for player in self.players:
+            player.reset(self)
+
+    def set_up(self, opt, internet=None):
         self.opt = opt
+        self.internet = internet
+        Settings.inform(f"Setting up a game: {opt}")
+
         if opt == "solo":
             self.player1.move = Bot.move
             self.player2.move = Paddle.move
@@ -195,58 +271,71 @@ class GameScreen(Screen, MyScreen):
             self.player2.move = Paddle.move
             self.player1.name = "Player 1"
             self.player2.name = "Player 2"
-        else:
-            pass
-            # self.player1_name.text = self.player1.name[:10] + "..." if len(self.player1.name) > 10 else self.player1.name
+        elif opt == "server":
+            self.internet.screen = self
 
-        self.start_countdown(self.start)
-            
-    def start(self):
-        self.started = True
-        direction = choice([-1, 1])
-        self.serve_ball(direction)
-        
+        elif opt == "client":
+            self.internet.screen = self
+
+        self.keyboard.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
+        self.add_action("COUNTDOWN", ((self.add_action, "START", None), 5))
+        self.ticking = Clock.schedule_interval(self.tick, 0.1)
+
+    def add_action(self, name, data, *dt):
+        self.actions.append((name, data))
+
+    def tick(self, *dt):
+        while len(self.actions):
+            name, data = self.actions.pop(0)
+            if name == "START":
+                self.started = True
+                self.ball.center = self.center
+                self.add_action("SERVE BALL", (choice([-1, 1]), 60))
+            elif name == "SERVE BALL":
+                direction, rotate_range = data
+                self.ball.velocity = Vector(direction * self.height * Settings.speed, 0).rotate(randint(-rotate_range, rotate_range))
+                self.gg = True # mark turn started
+                self.playing = self.schedule_game()
+            elif name == "COUNTDOWN":
+                target, self.streak = data
+                self.cc = True # mark countdown started
+                self.counting = Clock.schedule_interval(partial(self.countdown, target), 1)
+            elif name == "PAUSE":
+                if self.gg: # if during round
+                    self.gg = False
+                    self.playing.cancel()
+                    self.cache_streak = self.streak # save current streak, it will be overwrite by countdown
+                elif self.cc: # if during countdown
+                    self.cc = False
+                    self.counting.cancel()
+                elif self.serving is not None:
+                    self.serving.cancel()
+            elif name == "UNPAUSE":
+                if self.started: # if game was already started 
+                    self.streak = self.cache_streak
+                    self.cache_streak = 0
+                    self.gg = True # mark turn started
+                    self.playing = self.schedule_game()
+                else:
+                    self.add_action("START", None)
+
     def schedule_game(self):
         return Clock.schedule_interval(self.update, 1.0 / Settings.fps)
 
-    def start_countdown(self, target, duration=3):  
-        self.streak = duration
-        self.cc = True
-        self.countdown = Clock.schedule_interval(partial(self.countdown, target), 1)
-
     def countdown(self, callback, *dt):
         if self.streak == 0:
-            self.countdown.cancel()
+            self.counting.cancel()
             self.cc = False
-            callback()
+            if isinstance(callback, tuple):
+                callback, data = callback[0], callback[1:]
+                callback(*data)
+            else:
+                callback()
         else:
             self.streak -= 1
 
-    def pause(self):
-        if self.gg:
-            self.gg = False
-            self.game.cancel()
-        if self.cc:
-            self.cc = False
-            self.countdown.cancel()
-        self.cache_streak = self.streak
-
-    def unpause(self):
-        if self.started:
-            self.streak = self.cache_streak
-            self.gg = True
-            self.game = self.schedule_game()
-        else:
-            self.start()
-
-    def serve_ball(self, direction, rotate=60, *dt):  
-        self.ball.center = self.center
-        self.ball.velocity = Vector(direction * self.height * Settings.speed, 0).rotate(randint(-rotate, rotate))
-        self.game = self.schedule_game()
-        self.gg = True
-
     def on_key_down(self, keyboard, keycode, text, modifiers):
-        if self.gg:
+        if self.gg: # if during round
             val = keycode[1]
 
             if val == "up":
@@ -265,7 +354,7 @@ class GameScreen(Screen, MyScreen):
         return False
 
     def on_key_up(self, keyboard, keycode):
-        if self.gg:
+        if self.gg: # if during round
             val = keycode[1]
 
             if val == "up":
@@ -306,24 +395,12 @@ class GameScreen(Screen, MyScreen):
             self.turn_end(self.player1, -1)
 
     def turn_end(self, winner, direction):
-        self.game.cancel()
-        self.gg = False
+        self.playing.cancel()
+        self.gg = False # mark turn end
         winner.reward()
         self.streak = 0
+        self.ball.center = self.center # so the update in case of pause now won't take twice the same turn end
 
         self.reseting_players = Clock.schedule_once(self.reset_players, 1)
-        self.serving = Clock.schedule_once(partial(self.serve_ball, direction, 60), 1)
+        self.serving = Clock.schedule_once(partial(self.add_action, "SERVE BALL", (direction, 60)), 1)
 
-    def reset(self):
-        for player in self.players: 
-            player.score = 0
-        self.reset_players()
-
-        self.cc = self.gg = False
-        for event in self.events:
-            if event is not None:
-                event.cancel()
-
-    def reset_players(self, *dt):
-        for player in self.players:
-            player.reset(self)
