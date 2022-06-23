@@ -25,6 +25,7 @@ class Server(Internet):
         self.address = None
         self.socket_ = None
         self.server_name = ""
+        self.client_name = ""
         self.working = False
 
         self.screen = None
@@ -100,12 +101,6 @@ class Server(Internet):
                 Settings.inform(f"Client {address} left.")
                 break
 
-            elif self.abandon_ and self.playing and is_client:
-                Settings.inform(f"Abandoning the game with {address}.")
-                alive = send(ABANDON)
-                self.leave()
-                return
-
             elif data == ABANDON:
                 Settings.inform(f"Client {address} aborted.")
                 self.screen.add_action("REMOVE", address)
@@ -118,6 +113,12 @@ class Server(Internet):
                     self.screen.add_action("ERROR", ("Client resigned", "That user is not longer interested."))
                     self.client_address = None
                 alive = send(REQUEST_RECIVED)
+
+            elif self.abandon_ and self.playing and is_client:
+                Settings.inform(f"Abandoning the game with {address}.")
+                alive = send(ABANDON)
+                self.leave()
+                return
 
             elif self.playing and is_client:
                 alive = self.internet_action(data, send)
@@ -133,15 +134,15 @@ class Server(Internet):
                 else: # renew connection
                     Settings.inform(f"Client {address} is still waiting to join.")
                     alive = send(REQUEST_RECIVED)
-
+   
             elif self.accept and data == GAME_START:
                 Settings.inform(f"Starting the game with {address}")
+                self.client_name = client_name
                 refresh = 1. / Settings.fps
                 self.playing = True
                 self.accept = False
                 self.screen.add_action("START", self)
                 
-
             elif "client_name" in data:
                 client_name = data["client_name"]
                 del data["client_name"]

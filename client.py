@@ -1,8 +1,6 @@
 from _thread import *
-from tempfile import TemporaryFile
 import time
 import socket
-from tkinter import N
 
 from settings import *
 from internet import Internet
@@ -23,6 +21,7 @@ class Client(Internet):
         self.data = {}
         self.server_address = None
         self.client_name = ""
+        self.server_name = ""
         self.seeking = False
 
         self.screen = None
@@ -79,7 +78,7 @@ class Client(Internet):
                 self.screen.add_action("STOP WAITING", ("Server Lost", "Unable to join the server."))
         self.shutdown(socket_)
 
-    def listen_server(self, socket_, address, old_address, t0):
+    def listen_server(self, socket_, server_name, address, old_address, t0):
         def send(data):
             return self.send(socket_, data, address)
 
@@ -136,6 +135,7 @@ class Client(Internet):
                     self.waiting = False
                     self.playing = True
                     self.listening = False
+                    self.server_name = server_name
                     refresh = 1. / Settings.fps
                     self.screen.add_action("START", self)
 
@@ -179,7 +179,7 @@ class Client(Internet):
                         Settings.inform(f"New connection found at {address}, redirected to {new_address}.")
                         self.screen.add_action("ADD", (server_name, new_address))
                         self.rooms.add(address)
-                        start_new_thread(self.listen_server, (socket_, new_address, address, time.time()))
+                        start_new_thread(self.listen_server, (socket_, server_name, new_address, address, time.time()))
                         socket_ = self.get_empty_socket()
             time.sleep(Settings.server_frequency)
                     

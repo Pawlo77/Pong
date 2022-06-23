@@ -127,6 +127,7 @@ class Paddle(Widget):
     move_direction = NumericProperty(0)
     name = StringProperty("")
     bot = BooleanProperty(False)
+    id_ = None
     
     def bounce_ball(self, ball):
         if self.collide_widget(ball):
@@ -146,6 +147,10 @@ class Paddle(Widget):
     def reset(self, root, *dt):
         self.color = "white"
         self.center_y = root.center_y
+
+    def initialize(self, name, id_):
+        self.name = name
+        self.id_ = id_
 
     @staticmethod
     def move(me, root):

@@ -13,6 +13,7 @@ from widgets import Paddle, ErrorPopup, AcceptPopup, JoinPopup
 from bot import Bot
 from server import Server
 from client import Client
+from helpers import EventManager
 
 class MyScreen():
     def __init__(self):
@@ -20,12 +21,7 @@ class MyScreen():
 
 
 class MenuScreen(Screen, MyScreen):
-    
-    def abort(self):
-        game = self.manager.get_screen("game")
-
-        if game.internet is not None:
-            game.internet.abandon = True
+    pass
 
 
 class ConnectScreen(Screen, MyScreen):
@@ -38,11 +34,15 @@ class NameScreen(Screen, MyScreen):
     username_border_col = ColorProperty("white")
 
     def validate(self):
-        if len(self.username.text.strip()) > 0:
+        if len(self.username.text.strip()) > 0: # if provided and doesn't consists of whitespaces
+            # remove whitespaces and keep only 10 first characters
+            username = self.username.text.strip()
+            username = username[:10] + "..." if len(username) > 10 else username
+
             self.manager.transition.duration = Settings.transition_duration
             self.manager.transition.direction = "left"
             self.manager.current = self.next_screen
-            self.manager.current_screen.initialize(self.username.text.strip())
+            self.manager.current_screen.initialize(username)
             self.reset()
         else:
             self.username_border_col = "red"
@@ -53,7 +53,7 @@ class NameScreen(Screen, MyScreen):
 
 
 class ServerScreen(Screen, MyScreen):
-    dots = NumericProperty(0)
+    dots = NumericProperty(0) # to change number of dots on the end of screen's title 
     time = NumericProperty(Settings.waiting_timeout)
     clients_list = ListProperty([])
 
@@ -75,11 +75,11 @@ class ServerScreen(Screen, MyScreen):
         self.dots = 0
         self.clients_list = []
         self.actions = [] # all must be O(1)
-        self.time = Settings.waiting_timeout
+        self.time = Settings.waiting_timeout # shut down the server after specified time if is doesn't start a game
 
     def initialize(self, server_name):
         self.reset()
-        self.ticking = Clock.schedule_interval(self.tick, 1)
+        self.ticking = Clock.schedule_interval(self.tick, 1)# administrates all actions
         self.server.initialize(server_name, self)
         if not self.server.working:
             self.manager.current = "connect"
@@ -89,7 +89,7 @@ class ServerScreen(Screen, MyScreen):
     def add_action(self, name, data):
         self.actions.append((name, data))
 
-    def remove_client(self, address):
+    def remove_client(self, address): # remove client from list if it is present
         for idx, entry in enumerate(self.clients_list):
             if entry["address"] == address:
                 self.clients_list.pop(idx)
@@ -111,21 +111,22 @@ class ServerScreen(Screen, MyScreen):
 
         while len(self.actions):
             name, data = self.actions.pop(0)
-            if name == "REMOVE":
-                self.remove_client(data)
-            elif name == "ADD":
-                self.add_client(*data)
-            elif name == "ERROR":
-                if self.accept is not None:
+            match name:
+                case "REMOVE":
+                    self.remove_client(data)
+                case "ADD":
+                    self.add_client(*data)
+                case "ERROR":
+                    if self.accept is not None: # if accept popup is active or might be active
+                        self.accept.back_up()
+                    ErrorPopup(*data).open()
+                case "START":
+                    self.ticking.cancel() # we can't reset here, server will be lost
                     self.accept.back_up()
-                ErrorPopup(*data).open()
-            elif name == "START":
-                self.ticking.cancel() # we can't reset here, server will be lost
-                self.accept.back_up()
-                self.manager.transition.duration = Settings.transition_duration
-                self.manager.transition.direction = "up"
-                self.manager.current = "game"
-                self.manager.current_screen.set_up("server", data)
+                    self.manager.transition.duration = Settings.transition_duration
+                    self.manager.transition.direction = "up"
+                    self.manager.current = "game"
+                    self.manager.current_screen.set_up("server", data)
 
     def handler(self, client_name, client_address):
         self.accept = AcceptPopup(client_name, client_address, self)
@@ -134,7 +135,7 @@ class ServerScreen(Screen, MyScreen):
 
 class ClientScreen(Screen, MyScreen):
     servers_list = ListProperty([])
-    dots = NumericProperty(0)
+    dots = NumericProperty(0) # to change number of dots on the end of screen's title 
 
     def __init__(self, **kwargs):
         super(ClientScreen, self).__init__(**kwargs)
@@ -169,7 +170,7 @@ class ClientScreen(Screen, MyScreen):
             "text": server_name, "address": server_address, "root": self
         })
 
-    def remove_server(self, server_address):
+    def remove_server(self, server_address): # remove server from the list if present
         for idx, entry in enumerate(self.servers_list):
             if entry["address"] == server_address:
                 self.servers_list.pop(idx)
@@ -180,26 +181,25 @@ class ClientScreen(Screen, MyScreen):
 
         while len(self.actions):
             name, data = self.actions.pop(0)
-            if name == "REMOVE":
-                self.remove_server(data)
-            elif name == "ADD":
-                self.add_server(*data)
-            elif name == "STOP WAITING":
-                self.join.back_up(False)
-                ErrorPopup(*data).open()
-            elif name == "ERROR":
-                ErrorPopup(*data).open()
-            elif name == "START":
-                self.ticking.cancel() # we can't reset here, client will be lost
-                self.join.back_up(False)
-                self.manager.transition.duration = Settings.transition_duration
-                self.manager.transition.direction = "up"
-                self.manager.current = "game"
-                self.manager.current_screen.set_up("client", data)
+            match name:
+                case "REMOVE":
+                    self.remove_server(data)
+                case "ADD":
+                    self.add_server(*data)
+                case "STOP WAITING": # server we wait for is unavailable
+                    self.join.back_up(False)
+                    ErrorPopup(*data).open()
+                case "START":
+                    self.ticking.cancel() # we can't reset here, client will be lost
+                    self.join.back_up(False) # back up but don't abandon the server
+                    self.manager.transition.duration = Settings.transition_duration
+                    self.manager.transition.direction = "up"
+                    self.manager.current = "game"
+                    self.manager.current_screen.set_up("client", data)
 
     def handler(self, server_name, server_address):
-        self.client.request_game(server_address)
-        self.join = JoinPopup(server_name, self)
+        self.client.request_game(server_address) # send request to a server
+        self.join = JoinPopup(server_name, self) 
         self.join.open()
         
 
@@ -208,16 +208,20 @@ class StatsScreen(Screen, MyScreen):
 
 
 class PauseScreen(Screen, MyScreen):
+    def abort(self):
+        game = self.manager.get_screen("game")
+
+        if game.internet is not None:
+            game.internet.abandon = True
     
     def unpause(self):
         self.manager.transition.duration = 0
         self.manager.current = "game"
-        
         game = self.manager.current_screen
-        game.add_action("COUNTDOWN", ((game.add_action, "UNPAUSE", None), 3))
+        game.add_action("COUNTDOWN", (("UNPAUSE", None), 3))
 
 
-class GameScreen(Screen, MyScreen):
+class GameScreen(Screen, MyScreen, EventManager):
     ball = ObjectProperty(None)
     player1 = ObjectProperty(None)
     player2 = ObjectProperty(None)
@@ -251,11 +255,11 @@ class GameScreen(Screen, MyScreen):
             self.keyboard.unbind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
 
         self.started = False
-        self.cc = self.gg = False
+        self.cc = self.gg = False # marks if countdown or turn is active
         self.cache_streak = 0
         self.actions = [] # all must be O(1)
 
-    def reset_players(self, *dt):
+    def reset_players(self, *dt): # set all players in starting positions and set their color to white
         for player in self.players:
             player.reset(self)
 
@@ -264,154 +268,172 @@ class GameScreen(Screen, MyScreen):
         self.internet = internet
         Settings.inform(f"Setting up a game: {opt}")
 
-        if opt == "solo":
-            self.player1.move = Bot.move
-            self.player2.move = Paddle.move
-            self.player1.name = "Bot"
-            self.player2.name = "You"
-        elif opt == "offline":
-            self.player1.move = Paddle.move
-            self.player2.move = Paddle.move
-            self.player1.name = "Player 1"
-            self.player2.name = "Player 2"
-        elif opt == "server":
-            self.internet.screen = self
+        match opt:
+            case "solo":
+                self.player1.move = Bot.move
+                self.player1.initialize("Bot", 1)
+                self.player2.initialize("You", 2)
+            case "offline":
+                self.player1.initialize("Player 1", 1)
+                self.player2.initialize("Player 2", 2)
+            case "server":
+                self.internet.screen = self
+                self.player1.initialize(internet.client_name, 1)
+                self.player2.initialize(internet.server_name, 2)
+            case "client":
+                self.internet.screen = self
+                self.player1.initialize(internet.server_name, 2)
+                self.player2.initialize(internet.client_name, 1)
 
-        elif opt == "client":
-            self.internet.screen = self
+        if opt in ["solo", "offline", "server"]: # for client this action will be send by server
+            self.add_action("COUNTDOWN", (("START", None), 5))
 
+        self.player2.move = Paddle.move # this will always be moved by an user
         self.keyboard.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
-        self.add_action("COUNTDOWN", ((self.add_action, "START", None), 5))
-        self.ticking = Clock.schedule_interval(self.tick, 1. / Settings.fps)
+        self.ticking = Clock.schedule_interval(self.tick, 1. / Settings.fps) # administrates all game dependencies
+
+        # object in case of internet connection, they are reversed from client paddles
+        self.objects = (
+            "ball",
+            "player1",
+            "client",
+            "player2",
+            "streak", 
+        ) 
 
     def add_action(self, name, data, *dt):
         if self.opt == "server": # send data to a client
-            self.queue_data(name, data)
-        self.actions.append((name, data))
+            self.internet.event_dispatcher(name, data)
+
+        if self.opt == "client" and name in ["PAUSE", "ERROR", "RESET"]: # send  data to server
+            self.internet.event_dispatcher(name, data)
+            self.actions.append((name, data))
+
+        elif self.opt != "client" and name != "UPDATE": # UPDATE is only relevant for event_dispatcher
+            self.actions.append((name, data))
 
     def tick(self, *dt):
         while len(self.actions):
             name, data = self.actions.pop(0)
-            if name == "ERROR": # client left or has been lost
-                ErrorPopup(*data).open()
-            elif name == "RESET":
-                self.manager.current = "menu"
-                self.manager.get_screen(self.internet.type_).reset()
-                self.reset()
-            elif name == "START":
-                self.started = True
-                self.ball.center = self.center
-                self.add_action("SERVE BALL", (choice([-1, 1]), 60))
-            elif name == "SERVE BALL":
-                direction, rotate_range = data
-                self.ball.velocity = Vector(direction * self.height * Settings.speed, 0).rotate(randint(-rotate_range, rotate_range))
-                self.gg = True # mark turn started
-                self.playing = self.schedule_game()
-            elif name == "COUNTDOWN":
-                target, self.streak = data
-                self.cc = True # mark countdown started
-                self.counting = Clock.schedule_interval(partial(self.countdown, target), 1)
-            elif name == "PAUSE":
-                if self.gg: # if during round
-                    self.gg = False
-                    self.playing.cancel()
-                    self.cache_streak = self.streak # save current streak, it will be overwrite by countdown
-                elif self.cc: # if during countdown
-                    self.cc = False
-                    self.counting.cancel()
-                elif self.serving is not None:
-                    self.serving.cancel()
-            elif name == "UNPAUSE":
-                if self.started: # if game was already started 
-                    self.streak = self.cache_streak
-                    self.cache_streak = 0
-                    self.gg = True # mark turn started
+            print(name, data)
+
+            match name:
+                case "ERROR": # connection to second player lost or he left
+                    ErrorPopup(*data).open()
+                case "RESET":
+                    self.manager.current = "menu"
+                    self.manager.get_screen(self.internet.type_).reset()
+                    self.reset()
+                case "COUNTDOWN":
+                    target, self.streak = data
+                    self.cc = True # mark countdown started
+                    self.counting = Clock.schedule_interval(partial(self.countdown, target), 1)
+                case "PAUSE":
+                    if self.gg: # if during round
+                        self.gg = False
+                        self.playing.cancel()
+                        self.cache_streak = self.streak # save current streak, it will be overwrite by countdown
+                    elif self.cc: # if during countdown
+                        self.cc = False
+                        self.counting.cancel()
+                    elif self.serving is not None:
+                        self.serving.cancel()
+                case "UNPAUSE":
+                    if self.started: # if game was already started 
+                        self.streak = self.cache_streak
+                        self.cache_streak = 0
+                        self.gg = True # mark turn started
+                        self.playing = self.schedule_game()
+                    else:
+                        self.add_action("START", None)
+                case "TURN END":
+                    winner_id_, direction = data
+                    if winner_id_ == self.player1.id_:
+                        self.player1.reward()
+                    else:
+                        self.player2.reward()
+                    self.ball.center = self.center # pause now won't take twice the same turn end
+                    self.playing.cancel() # stop update()
+                    self.streak = 0 # reset streak
+                    self.gg = False # mark turn end
+                    self.reseting_players = Clock.schedule_once(self.reset_players, 1) # reset players after 1 s so player could prepare
+                    self.serving = Clock.schedule_once(partial(self.add_action, "SERVE BALL", (direction, 60)), 1) # start next turn after 1 s so player could prepare
+                case "PLAY":
                     self.playing = self.schedule_game()
-                else:
-                    self.add_action("START", None)
+                case "START":
+                    self.started = True # mark that game was started
+                    self.add_action("SERVE BALL", (choice([-1, 1]), 60))  
+
+                # this action wont be fired for client
+                case "SERVE BALL":
+                    direction, rotate_range = data
+                    self.ball.center = self.center
+                    self.ball.velocity = Vector(direction * self.height * Settings.speed, 0).rotate(randint(-rotate_range, rotate_range))
+                    self.gg = True # mark turn started
+                    self.add_action("PLAY", None)
+
+                # this will be fired only for server and client
+                case "UPDATE":
+                    for name, value in data.items:
+                        print(name, value)
+                        match name:
+                            case "ball":
+                                self.ball.center = value
+                            case "player1": # players for client are revered from server's
+                                self.player2.center = value
+                            case "player2" | "client": # players for client are revered from server's
+                                self.player1.center = value
+                            case "streak":
+                                self.streak = value
 
     def schedule_game(self):
-        return Clock.schedule_interval(self.update, 1.0 / Settings.fps)
+        return Clock.schedule_interval(self.update, 1.0 / Settings.fps)  # set up a clock to call update()
 
     def countdown(self, callback, *dt):
-        if self.streak == 0:
+        if self.streak == 0: # countdown timeout
             self.counting.cancel()
-            self.cc = False
-            if isinstance(callback, tuple):
-                callback, data = callback[0], callback[1:]
-                callback(*data)
-            else:
-                callback()
+            self.cc = False # mark countdown as finished
+            self.add_action(*callback)
         else:
             self.streak -= 1
 
-    def on_key_down(self, keyboard, keycode, text, modifiers):
-        if self.gg: # if during round
-            val = keycode[1]
-
-            if val == "up":
-                self.player2.move_direction = 1
-            elif val == "down":
-                self.player2.move_direction = -1
-
-            elif val == "w" and self.opt == "offline":
-                self.player1.move_direction = 1
-            elif val == "s" and self.opt == "offline":
-                self.player1.move_direction = -1
-
-            else:
-                return False
-            return True
-        return False
-
-    def on_key_up(self, keyboard, keycode):
-        if self.gg: # if during round
-            val = keycode[1]
-
-            if val == "up":
-                self.player2.move_direction = 0
-            elif val == "down":
-                self.player2.move_direction = 0
-
-            elif val == "w" and self.opt == "offline":
-                self.player1.move_direction = 0
-            elif val == "s" and self.opt == "offline":
-                self.player1.move_direction = 0
-
-            else:
-                return False
-            return True
-        return False
-
     def update(self, *dt):
-        self.ball.move()
-        self.player1.move(self.player1, self)
-        self.player2.move(self.player2, self)
+        if self.opt in ["client", "server", "offline", "solo"]: # if user is a player
+            self.player2.move(self.player2, self)
 
-        # bounce off top and bottom
-        if self.ball.y < 0 or self.ball.top > self.height:
-            self.ball.velocity_y *= -1
-        
-        # bounce of paddles
-        p1 = self.player1.bounce_ball(self.ball)
-        p2 = self.player2.bounce_ball(self.ball)
-        if p1 or p2:
-            self.streak += 1
+        if self.opt in ["offline", "solo"]: # if opponent is bot or physically with us
+            self.player1.move(self.player1, self)
 
-        # went off the side?
-        if self.ball.x < self.x:
-            self.turn_end(self.player2, 1)
+        if self.opt in ["server", "offline", "solo"]: # if game is beeing calculated by that computer
+            self.ball.move()
 
-        elif self.ball.right > self.width:
-            self.turn_end(self.player1, -1)
+            # bounce off top and bottom
+            if self.ball.y < 0 or self.ball.top > self.height:
+                self.ball.velocity_y *= -1
+            # bounce off the paddles
+            p1 = self.player1.bounce_ball(self.ball)
+            p2 = self.player2.bounce_ball(self.ball)
+            if p1 or p2:
+                self.streak += 1
+
+            # went off the side - turn ends
+            if self.ball.x < self.x:
+                self.turn_end(self.player2, 1)
+            elif self.ball.right > self.width:
+                self.turn_end(self.player1, -1)
+            
+        if self.opt == "server": # send updated position of all objects to a client
+            for name, value in (
+                ("ball", self.ball.center),
+                ("player1", self.player1.center),
+                ("player2", self.player2.center),
+                ("streak", self.streak)
+            ):
+                self.internet.event_dispatcher("UPDATE", (name, value))
+
+        if self.opt == "client": # self new positon of client's paddle to the server
+            self.internet.event_dispatcher("UPDATE", ("client", self.player2.center))                
 
     def turn_end(self, winner, direction):
-        self.playing.cancel()
-        self.gg = False # mark turn end
-        winner.reward()
-        self.streak = 0
-        self.ball.center = self.center # so the update in case of pause now won't take twice the same turn end
-
-        self.reseting_players = Clock.schedule_once(self.reset_players, 1)
-        self.serving = Clock.schedule_once(partial(self.add_action, "SERVE BALL", (direction, 60)), 1)
+        self.add_action("TURN END", (winner.id_, direction))
 
