@@ -5,23 +5,16 @@ import json
 from settings import *
 
 class Internet:
-    def get_socket_(self, port):
-        try:
-            socket_ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            socket.settimeout(0.1)
-            address = (Settings.host, port)
-            # socket_.connect(address)
-        except Exception as e:
-            Settings.handle_error(e)
-            return None, None
-        return socket_, address
+    def get_empty_socket(self):
+        socket_ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket_.settimeout(Settings.socket_timeout)
+        return socket_
 
     def send(self, socket_, data, address):
         data = {**data, **all}
         data = json.dumps(data).encode(Settings.encoding)
         
         try:
-            print(data, address)
             socket_.sendto(data, address)
         except Exception as e:
             Settings.handle_error(e)
@@ -32,7 +25,6 @@ class Internet:
         try:
             data, address = socket_.recvfrom(Settings.conn_data_limit)
             data = data.decode(Settings.encoding)
-            print(data, address)
             if data:
                 data = json.loads(data)
                 if "key" in data.keys():
@@ -43,10 +35,27 @@ class Internet:
             Settings.handle_error(e)
         return {}, None
 
+    def data_recive(self, socket_):
+        return self.recive(socket_)[0]
+
     def shutdown(self, obj):
         try:
             obj.close()
         except Exception as e:
             Settings.handle_error(e)
     
+    def queue_data(self, key, value):
+        self.data[key] = value
+
+    def internet_action(self, data, send):
+        alive = False
+        if self.data: # if we have data to send
+            alive = self.send(self.data)
+            self.data = {}
+        else: # inform him that we are still alive
+            alive = send(REQUEST_RECIVED)
+        if data and data != REQUEST_RECIVED: # if recived data is significant pass it to a game
+            for key, val in data.items():
+                self.add_action((key, val))
+        return alive
 

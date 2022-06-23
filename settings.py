@@ -19,7 +19,8 @@ class Settings():
     rooms_num = 20
     conn_data_limit = 1024
 
-    connection_timeout = 10
+    connection_timeout = 2
+    socket_timeout = 0.1
     accept_timeout = 10
     waiting_timeout = 180
     joining_timeout = 180
@@ -50,10 +51,15 @@ all = {
 }
 
 ALIVE = {"free": None,}
+LEAVE = {"left": True,}
+
+WAITING = {"waiting": True,}
 REQUEST_GAME = {"ok": True,}
 REQUEST_RECIVED = {"understood": True,}
-WAITING = {"waiting": True,}
-ABANDON = {"bye": True,}
 BUSY = {"allowed": False,}
+ABANDON = {"bye": True,}
+
 GAME_ACCEPTED = {"allowed": True,}
 GAME_START = {"start": True,}
+PAUSE = {"pause": True,}
+UNPAUSE = {"pause": False,}

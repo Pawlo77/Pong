@@ -81,7 +81,7 @@ class ServerScreen(Screen, MyScreen):
         self.reset()
         self.ticking = Clock.schedule_interval(self.tick, 1)
         self.server.initialize(server_name, self)
-        if not self.server.listening:
+        if not self.server.working:
             self.manager.current = "connect"
             ErrorPopup("Server error", "Unable to create server, try again later.").open()
             self.reset()
@@ -282,9 +282,11 @@ class GameScreen(Screen, MyScreen):
 
         self.keyboard.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
         self.add_action("COUNTDOWN", ((self.add_action, "START", None), 5))
-        self.ticking = Clock.schedule_interval(self.tick, 0.1)
+        self.ticking = Clock.schedule_interval(self.tick, 1. / Settings.fps)
 
     def add_action(self, name, data, *dt):
+        if self.opt == "server": # send data to a client
+            self.queue_data(name, data)
         self.actions.append((name, data))
 
     def tick(self, *dt):

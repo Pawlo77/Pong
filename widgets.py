@@ -108,7 +108,8 @@ class JoinPopup(TickingPopup):
 
     def back_up(self, abandon=True):
         super().back_up()
-        self.root.client.abandon = abandon
+        if abandon:
+            self.root.client.abandon()
 
 
 class ErrorPopup(Popup):
