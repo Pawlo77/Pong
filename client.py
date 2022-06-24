@@ -40,9 +40,6 @@ class Client(Internet):
 
     def request_game(self, server_address):
         self.server_address = server_address
-
-    def abandon(self):
-        self.abandon_ = True
         
     # test if binded server is open. If yes, return its name
     def test_server(self, address, socket_, initial=True): 
@@ -71,7 +68,7 @@ class Client(Internet):
 
             if self.playing and is_server:
                 self.screen.add_action("ERROR", ("Server lost", "Game crashed due to lost connection with a host"))
-                self.leave()
+                self.screen.add_action("LEAVE", None)
             if self.waiting and is_server:
                 self.server_address = None
                 self.waiting = False
@@ -102,22 +99,26 @@ class Client(Internet):
             elif is_server:
                 if data == ABANDON:
                     Settings.inform(f"Server {address} abandoned us.")
-                    if self.playing:
-                        self.screen.add_action("ERROR", ("Server lost", "Game crashed due to lost connection with a host"))
-                        self.leave()
                     alive = send(REQUEST_RECIVED)
                     self.server_address = None
+                    
+                    if self.playing:
+                        self.screen.add_action("ERROR", ("Server lost", "Player left a game"))
+                        self.screen.add_action("LEAVE", None)
+                        return
+                    else:
+                        break # will call connecion_error
 
                 elif self.abandon_:
                     Settings.inform(f"Abandoned actions with {address}.")
-                    if self.playing:
-                        self.leave()
-                        return
-
                     alive = send(ABANDON)
                     self.abandon_ = False
                     self.waiting = False
                     self.server_address = None
+
+                    if self.playing:
+                        self.screen.add_action("LEAVE", None)
+                        return
 
                 elif self.playing:
                     alive = self.internet_action(data, send)
@@ -183,5 +184,3 @@ class Client(Internet):
                         socket_ = self.get_empty_socket()
             time.sleep(Settings.server_frequency)
                     
-    def leave(self):
-        self.screen.add_action("RESET", None)

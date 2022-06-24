@@ -61,5 +61,5 @@ ABANDON = {"bye": True,}
 
 GAME_ACCEPTED = {"allowed": True,}
 GAME_START = {"start": True,}
-PAUSE = {"pause": True,}
-UNPAUSE = {"pause": False,}
+# PAUSE = {"pause": True,}
+# UNPAUSE = {"pause": False,}

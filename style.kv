@@ -318,13 +318,13 @@
     NameLabel:
         halign: "left"
         pos_hint: {"x": 0.02, "top": 0.98}
-        text: player1.name if len(player1.name) < 8 else player1.name[:8] + "..."
+        text: player1.name
         color: player1.color
 
     NameLabel:
         halign: "right"
         pos_hint: {"right": 0.98, "top": 0.98}
-        text: player2.name if len(player2.name) < 8 else player2.name[:8] + "..."
+        text: player2.name
         color: player2.color
 
     ScoreLabel:
@@ -390,8 +390,6 @@
         text: "i"
         on_press:
             root.add_action("PAUSE", None)
-            root.manager.transition.duration = 0
-            root.manager.current = "pause"
 
 <PauseScreen>:
     DefaultLabel:
@@ -408,17 +406,15 @@
             text:
                 "Resume"
             on_press:
-                root.unpause()
+                root.manager.get_screen("game").add_action("UNPAUSE", None)
 
         OptionButton:
             text:
                 "Go to menu"
             on_press:
-                root.manager.transition.duration = root.settings.transition_duration
-                root.manager.transition.direction = "down"
-                root.manager.current = "menu"
-                root.manager.get_screen("game").reset()
+                root.abort()
 
         OptionButton:
             text: "Exit"
-            on_press: exit(0)
+            on_press:
+                root.exit_()

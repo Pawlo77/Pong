@@ -1,10 +1,12 @@
-from audioop import add
 import socket
 import json
 
 from settings import *
 
 class Internet:
+    def abandon(self):
+        self.abandon_ = True
+
     def get_empty_socket(self):
         socket_ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         socket_.settimeout(Settings.socket_timeout)
@@ -46,8 +48,6 @@ class Internet:
     
     def event_dispatcher(self, key, value=None):
         match key:
-            case "SERVE BALL":
-                pass
             case "UPDATE":
                 if "UPDATE" in self.data:
                     self.data["UPDATE"][value[0]] = value[1]

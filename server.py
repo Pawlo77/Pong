@@ -60,9 +60,6 @@ class Server(Internet):
         self.accept = True
         self.client_address = address
 
-    def abandon(self):
-        self.abandon_ = True
-
     def connection_error(self, is_client, address, socket_):
         if not self.working: # planned exit
             self.send(socket_, LEAVE, address)
@@ -72,7 +69,7 @@ class Server(Internet):
             
             if self.playing and is_client:
                 self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
-                self.leave()
+                self.screen.add_action("LEAVE", None)
             elif self.accept and is_client:
                 self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
 
@@ -97,27 +94,22 @@ class Server(Internet):
             alive = False
             data = self.data_recive(socket_)
 
-            if data == LEAVE:
-                Settings.inform(f"Client {address} left.")
-                break
-
-            elif data == ABANDON:
+            if data == ABANDON:
                 Settings.inform(f"Client {address} aborted.")
                 self.screen.add_action("REMOVE", address)
+                alive = send(REQUEST_RECIVED)
                 
                 if self.playing and is_client:
-                    self.screen.add_action("ERROR", ("Player left", "Player left the game."))
-                    self.leave()
-                    return
-                if self.screen.accept is not None and self.screen.accept.client_address == address: # if accept popup to that client was open
+                    self.screen.add_action("ERROR", ("Client lost", "Player left the game."))
+                    self.screen.add_action("LEAVE", None)
+                elif self.screen.accept is not None and self.screen.accept.client_address == address: # if accept popup to that client was open
                     self.screen.add_action("ERROR", ("Client resigned", "That user is not longer interested."))
                     self.client_address = None
-                alive = send(REQUEST_RECIVED)
 
             elif self.abandon_ and self.playing and is_client:
                 Settings.inform(f"Abandoning the game with {address}.")
                 alive = send(ABANDON)
-                self.leave()
+                self.screen.add_action("LEAVE", None)
                 return
 
             elif self.playing and is_client:
@@ -193,9 +185,6 @@ class Server(Internet):
                 else:
                     self.shutdown(new_socket_)
             time.sleep(Settings.server_frequency)
-
-    def leave(self):
-        self.screen.add_action("RESET", None)
 
 # import psutil
 # conns = psutil.net_connections()
