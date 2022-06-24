@@ -5,10 +5,11 @@ class Settings():
     moveSpeed = 0.02 # paddle move speed
     botMoveSpeed = 0.002 # bot is slower than real player
     startPaddleSize = 0.3
-    rounds_to_win = 10
+    rounds_to_win = 1
+    time_to_start = 1
+    time_to_unpause = 3
 
-    font_size = 120
-    transition_duration = 3
+    transition_duration = 0
 
     default_port = 8000
     host = "127.0.0.1"

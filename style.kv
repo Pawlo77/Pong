@@ -80,28 +80,28 @@
 
     FloatLayout:        
         DefaultLabel:
-            font_size: max(min(self.height / 3, self.width / 5), 1)
-            size_hint: (0.8, 0.5)
-            pos_hint: {"y": 0.5, "center_x": 0.5}
+            font_size: max(min(self.height / 4, self.width / 8), 1)
+            size_hint: (0.8, 0.6)
+            pos_hint: {"y": 0.375, "center_x": 0.5}
             text: root.main_text
         
         DefaultLabel:
-            size_hint: (0.8, 0.3)
+            size_hint: (0.8, 0.15)
             pos_hint: {"y": 0.2, "center_x": 0.5}
             text: root.minor_text
 
         OptionButton:
             font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
-            size_hint: (0.5, 0.2)
-            pos_hint: {"y": 0, "right": 1}
+            size_hint: (0.5, 0.15)
+            pos_hint: {"y": 0.025, "right": 0.975}
             text: root.btn_text
             on_press: 
                 root.accept()
 
         OptionButton:
             font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
-            size_hint: (0.4, 0.2)
-            pos_hint: {"y": 0, "x": 0}
+            size_hint: (0.4, 0.15)
+            pos_hint: {"y": 0.025, "x": 0.025}
             text: root.exit_text
             on_press: 
                 root.back_up()
@@ -110,15 +110,15 @@
 <JoinPopup>:
     FloatLayout:
         DefaultLabel:
-            font_size: max(min(self.height / 3, self.width / 5), 1)
+            font_size: max(min(self.height / 4, self.width / 8), 1)
             size_hint: (0.8, 0.5)
-            pos_hint: {"y": 0.5, "center_x": 0.5}
+            pos_hint: {"y": 0.3, "center_x": 0.5}
             text: "Waiting for host to accept" + root.time % 4 * "."
 
         OptionButton:
             font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
-            size_hint: (0.4, 0.2)
-            pos_hint: {"y": 0, "x": 0}
+            size_hint: (0.4, 0.15)
+            pos_hint: {"y": 0.025, "x": 0.025}
             text: root.exit_text
             on_press: 
                 root.back_up()
@@ -127,14 +127,14 @@
     FloatLayout:        
         DefaultLabel:
             font_size: max(min(self.height / 5, self.width / 5), 1)
-            size_hint: (0.8, 0.7)
-            pos_hint: {"y": 0.4, "center_x": 0.5}
+            size_hint: (0.8, 0.6)
+            pos_hint: {"y": 0.2, "center_x": 0.5}
             text: root.error
 
         OptionButton:
             font_size: max(min(root.height * 2 / 3, root.width * 2 / 5), 1)
-            size_hint: (0.8, 0.3)
-            pos_hint: {"y": 0, "center_x": 0.5}
+            size_hint: (0.6, 0.15)
+            pos_hint: {"y": 0.025, "center_x": 0.5}
             text: "Close"
             on_press: 
                 root.dismiss()
@@ -297,7 +297,7 @@
                 root.manager.transition.direction = "right"
                 root.manager.current = "menu"
 
-<NameScreen>
+<NameScreen>:
     username: username
 
     DefaultGridLayout:
@@ -369,7 +369,7 @@
         size_hint: (0.8, 0.44)
         data: root.clients_list
 
-<ClientScreen>
+<ClientScreen>:
     DefaultLabel:
         text: "Searching servers" + root.dots * "."
         pos_hint: {"center_x": 0.5, "y": 0.8}
@@ -436,13 +436,11 @@
 
     Paddle:
         id: player1
-        # center_y: root.center_y
         x: self.width / 2
         size_hint: 0.02, 0.33
         
     Paddle:
         id: player2
-        # center_y: root.center_y
         right: root.right - self.width / 2
         size_hint: 0.02, 0.33
 

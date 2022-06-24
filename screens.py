@@ -1,3 +1,4 @@
+from os import stat
 from re import T
 from kivy.properties import NumericProperty, ObjectProperty, ReferenceListProperty, BooleanProperty, StringProperty, ColorProperty, NumericProperty, ListProperty
 from kivy.vector import Vector
@@ -23,7 +24,7 @@ class MyScreen():
     # convencion: every ing means threaded process / clock interval
     # ticking administrates events
 
-    def add_action(self, name, data):
+    def add_action(self, name, data, *dt):
         self.actions.append((name, data))
 
 
@@ -126,7 +127,7 @@ class ServerScreen(Screen, MyScreen):
                     ErrorPopup(*data).open()
                 case "START":
                     self.ticking.cancel() # we can't reset here, server will be lost
-                    self.accept.back_up()
+                    self.accept.back_up(True)
                     self.manager.transition.duration = settings.transition_duration
                     self.manager.transition.direction = "up"
                     self.manager.current = "game"
@@ -238,7 +239,8 @@ class SettingsScreen(Screen, MyScreen):
         if targets[3] is not None:
             settings.speed = targets[3]
         if targets[4] is not None:
-            settings.rounds_to_win = int(targets[4])
+            targets[4] = int(targets[4])
+            settings.rounds_to_win = targets[4]
     
         for idx in range(len(fields)):
             if targets[idx] is not None:
@@ -289,7 +291,7 @@ class GameScreen(Screen, MyScreen, EventManager):
             self.keyboard.unbind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
 
         self.reset_players()
-        self.started = False
+        self.started = self.ended = False
         self.cc = self.gg = False # marks if countdown or turn is active
         self.cache_streak = self.streak = 0
         self.internet = self.target = None # client or server handling connections 
@@ -350,7 +352,7 @@ class GameScreen(Screen, MyScreen, EventManager):
 
     def start(self):
         self.ball.center = self.center
-        self.start_countdown(self.serve, [choice([-1, 1])], 5)
+        self.start_countdown(self.serve, [choice([-1, 1])], settings.time_to_start)
 
     def pause(self):
         if self.gg: # if during round
@@ -365,7 +367,7 @@ class GameScreen(Screen, MyScreen, EventManager):
         if not self.started: # if game haven't started at all, call normal entry
             self.start()
         else:
-            self.start_countdown(self.unpause_helper, [], 3)
+            self.start_countdown(self.unpause_helper, [], settings.time_to_unpause)
 
     def unpause_helper(self):
         self.streak = self.cache_streak
@@ -389,8 +391,33 @@ class GameScreen(Screen, MyScreen, EventManager):
         self.ball.center = self.center # pause now won't take twice the same turn end
         winner.reward()
 
+        if self.player1.score == settings.rounds_to_win:
+            self.end_game(self.player1)
+            return
+        elif self.player2.score == settings.rounds_to_win:
+            self.end_game(self.player2)
+            return
+
         self.target = ("serve", direction)  # during turn end mark that we need to call serve again in case of pause right now
         self.serving = Clock.schedule_once(partial(self.serve, direction), 1) # start next turn after 1 s so player could prepare
+
+    def end_game(self, winner):
+        if winner == self.player2: # we won
+            if self.opt == "server": # send info to client
+                self.internet.event_dispatcher("GAME END", [False, self.player2.score, self.player1.score]) # again players reversed
+        else: # opponent won
+            if self.opt == "server": # send info to client
+                self.internet.event_dispatcher("GAME END", [True, self.player2.score, self.player1.score])
+        self.end_game_helper(winner == self.player2, self.player1.score, self.player2.score)
+
+    def end_game_helper(self, status, score1, score2, *dt):
+        settings.inform(f"Game ended. ({status})")
+        self.ended = True
+        if status: # status True if we won, False if the opponent won
+            ErrorPopup("Game ended", f"You WON against {self.player1.name} with score {score2} : {score1}.").open()
+        else:
+            ErrorPopup("Game ended", f"You LOST against {self.player1.name} with score {score2} : {score1}.").open()
+        Clock.schedule_once(partial(self.add_action, "LEAVE", None), 0.5) # give time to send the final data
 
     def reset_players(self, *dt): # set all players in starting positions and set their color to white
         for player in self.players:

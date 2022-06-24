@@ -57,22 +57,24 @@ class Server(Internet):
         self.client_address = address
 
     def connection_error(self, is_client, address, socket_):
-        if not self.working: # planned exit
-            self.send(socket_, LEAVE, address)
-        else:
-            self.screen.add_action("REMOVE", address)
-            self.clients.remove(address)
-            
-            if self.playing and is_client:
-                self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
-                self.screen.add_action("LEAVE", None)
+        f = self.screen is not None and self.playing and self.screen.ended == True # prevents sending leave on game_end
+        if not f:
+            if not self.working: # planned exit
+                self.send(socket_, LEAVE, address)
+            else:
+                self.screen.add_action("REMOVE", address)
+                self.clients.remove(address)
+                
+                if self.playing and is_client:
+                    self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
+                    self.screen.add_action("LEAVE", None)
 
-            elif self.accept and is_client:
-                self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
+                elif self.accept and is_client:
+                    self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
 
-                if self.screen.accept is not None and self.screen.accept.client_address == address: # if accept popup is open
-                    self.screen.add_action("ERROR", ("Connection lost", "Connection to that client has been lost."))
-                    self.screen.accept.back_up()
+                    if self.screen.accept is not None and self.screen.accept.client_address == address: # if accept popup is open
+                        self.screen.add_action("ERROR", ("Connection lost", "Connection to that client has been lost."))
+                        self.screen.accept.back_up()
         self.shutdown(socket_)
 
     def listen_client(self, socket_, address, t0):

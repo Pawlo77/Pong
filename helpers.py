@@ -134,6 +134,9 @@ class EventManager: # helper for GameScreen
                     settings.inform("Game unpaused.")
                     self.manager.transition.duration = 0
                     self.manager.current = "game"
+                case "GAME END":
+                    self.end_game_helper(*data)
+        
         return True
 
     def send_data(self):

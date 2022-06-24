@@ -56,19 +56,21 @@ class Client(Internet):
         return None, None
 
     def connection_error(self, is_server, address, old_address, socket_):
-        if not self.seeking and self.server_address != address: # planned exit
-            self.send(socket_, LEAVE, address)
-        else:
-            self.screen.add_action("REMOVE", address)
-            self.rooms.remove(old_address)
+        f = self.screen is not None and self.playing and self.screen.ended == True # prevents sending leave on game_end
+        if not f:
+            if not self.seeking and self.server_address != address: # planned exit
+                    self.send(socket_, LEAVE, address)
+            else:
+                self.screen.add_action("REMOVE", address)
+                self.rooms.remove(old_address)
 
-            if self.playing and is_server: # if we play against this server
-                self.screen.add_action("ERROR", ("Server lost", "Game crashed due to lost connection with a host"))
-                self.screen.add_action("LEAVE", None)
-            elif self.waiting and is_server: # if we wait for this server to accept us
-                self.server_address = None
-                self.waiting = False
-                self.screen.add_action("STOP WAITING", ("Server Lost", "Unable to join the server."))
+                if self.playing and is_server: # if we play against this server
+                    self.screen.add_action("ERROR", ("Server lost", "Game crashed due to lost connection with a host"))
+                    self.screen.add_action("LEAVE", None)
+                elif self.waiting and is_server: # if we wait for this server to accept us
+                    self.server_address = None
+                    self.waiting = False
+                    self.screen.add_action("STOP WAITING", ("Server Lost", "Unable to join the server."))
         self.shutdown(socket_)
 
     # threaded connection with specified server

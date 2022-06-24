@@ -97,6 +97,11 @@ class AcceptPopup(TickingPopup):
         self.minor_text = f"Timeout in {self.time} seconds..."
         self.btn_text = "-"
 
+    def back_up(self, keep_client=False):
+        if not keep_client:
+            self.client_address = self.root.server.client_address = None
+        super().back_up()
+
 
 class JoinPopup(TickingPopup):
     def __init__(self, server_name, root, **kwargs):
@@ -112,7 +117,7 @@ class JoinPopup(TickingPopup):
             self.root.client.abandon() # notify server that we don't want to join him anymore
 
 
-class ErrorPopup(Popup):
+class ErrorPopup(Popup): # popup to inform user that doesn't provide any interaction
     error = StringProperty("")
 
     def __init__(self, title, error, **kwargs):

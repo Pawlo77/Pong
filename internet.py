@@ -1,7 +1,7 @@
 import socket
 import json
 
-from settings import settings, REQUEST_RECIVED
+from settings import settings, REQUEST_RECIVED, all
 
 class Internet:
     def __init__(self):
