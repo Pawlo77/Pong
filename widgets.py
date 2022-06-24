@@ -164,16 +164,12 @@ class Paddle(Widget):
 
     @staticmethod
     def move(me, root):
-        moved = 0
         if me.move_direction == 1:
             new = me.top + Settings.moveSpeed * root.height
-            new = min(new, root.top)
-            moved = new - me.top
+            me.top = min(new, root.top)
         elif me.move_direction == -1:
             new = me.y - Settings.moveSpeed * root.height
-            new = max(new, root.y)
-            moved = new - me.y
-        return moved + me.y
+            me.y = max(new, root.y)
 
 
 class Ball(Widget):

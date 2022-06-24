@@ -46,27 +46,26 @@ class Internet:
         except Exception as e:
             Settings.handle_error(e)
     
-    def event_dispatcher(self, key, value=None):
-        match key:
-            case "UPDATE":
-                if "UPDATE" in self.data:
-                    self.data["UPDATE"][value[0]] = value[1]
-                else:
-                    self.data["UPDATE"] = {value[0]: value[1]}
-            case _:
-                self.data[key] = value
-
+    def event_dispatcher(self, key, value):
+        self.data.append((key, value))
 
     def internet_action(self, data, send):
         alive = False
 
-        if self.data: # if we have data to send
-            alive = send(self.data)
-            self.data = {}
+        if self.data or self.update_data: # if we have data to send
+            send_ = self.data + [("UPDATE", self.update_data)]
+            send_ = {"GAME": send_}
+            alive = send(send_)
+            self.data = []
+            self.update_data = tuple()
         else: # inform him that we are still alive
             alive = send(REQUEST_RECIVED)
-        if data and data != REQUEST_RECIVED: # if recived data is significant pass it to a game
-            for key, val in data.items():
-                self.screen.actions.append((key, val))
+
+        # if we have some data to recive
+        if "GAME" in data:
+            self.screen.actions += data["GAME"]
+        # if data and data != REQUEST_RECIVED: # if recived data is significant pass it to a game
+        #     for key, val in data.items():
+        #         self.screen.actions.append((key, val))
         return alive
 

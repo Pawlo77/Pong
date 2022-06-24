@@ -20,7 +20,8 @@ class Server(Internet):
                 self.shutdown(self.socket_)
 
         self.clients = set()
-        self.data = {}
+        self.data = []
+        self.update_data = tuple()
         self.client_address = None
         self.address = None
         self.socket_ = None
@@ -70,12 +71,13 @@ class Server(Internet):
             if self.playing and is_client:
                 self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
                 self.screen.add_action("LEAVE", None)
+
             elif self.accept and is_client:
                 self.screen.add_action("ERROR", ("Connection error", "Connection with client lost."))
 
-            if self.screen.accept is not None and self.screen.accept.client_address == address: # if accept popup is open
-                self.screen.add_action("ERROR", ("Connection lost", "Connection to that client has been lost."))
-                self.screen.accept.back_up()
+                if self.screen.accept is not None and self.screen.accept.client_address == address: # if accept popup is open
+                    self.screen.add_action("ERROR", ("Connection lost", "Connection to that client has been lost."))
+                    self.screen.accept.back_up()
         self.shutdown(socket_)
 
     def listen_client(self, socket_, address, t0):

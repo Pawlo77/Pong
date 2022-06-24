@@ -18,7 +18,8 @@ class Client(Internet):
             Settings.inform(f"Resetting a client.")
 
         self.rooms = set()
-        self.data = {}
+        self.data = []
+        self.update_data = tuple()
         self.server_address = None
         self.client_name = ""
         self.server_name = ""
@@ -69,7 +70,7 @@ class Client(Internet):
             if self.playing and is_server:
                 self.screen.add_action("ERROR", ("Server lost", "Game crashed due to lost connection with a host"))
                 self.screen.add_action("LEAVE", None)
-            if self.waiting and is_server:
+            elif self.waiting and is_server:
                 self.server_address = None
                 self.waiting = False
                 self.screen.add_action("STOP WAITING", ("Server Lost", "Unable to join the server."))
@@ -120,7 +121,7 @@ class Client(Internet):
                         self.screen.add_action("LEAVE", None)
                         return
 
-                elif self.playing:
+                elif self.playing and is_server:
                     alive = self.internet_action(data, send)
 
                 elif data == BUSY:

@@ -47,17 +47,14 @@ class EventManager: # helper for GameScreen
         return False
 
     def handle_game_action(self):
-        player2_y = self.player2.y
-
-        if self.gg: # if during round
+         if self.gg: # if during round
             if self.opt in ["server", "offline", "solo"]: # if user is a player
-                player2_y = self.player2.move(self.player2, self)
+                self.player2.move(self.player2, self)
             if self.opt in ["offline", "solo"]: # if opponent is bot or physically with us
-                self.player1.y = self.player1.move(self.player1, self)
+                self.player1.move(self.player1, self)
 
             if self.opt in ["server", "offline", "solo"]: # if game is beeing calculated by that computer
                 self.ball.move()
-                self.player2.y = player2_y
 
                 # bounce off top and bottom
                 if self.ball.y < 0 or self.ball.top > self.height:
@@ -74,7 +71,6 @@ class EventManager: # helper for GameScreen
                     self.turn_end(self.player2, 1)
                 elif self.ball.right > self.width:
                     self.turn_end(self.player1, -1)
-        return player2_y
 
     def handle_actions(self):
         while len(self.actions):
@@ -117,36 +113,79 @@ class EventManager: # helper for GameScreen
                     self.manager.transition.duration = 0
                     self.manager.current = "game"
                 case "UPDATE":
-                    for name, val in data.items():
-                        match name:
-                            case "ball":
-                                self.ball.center_y = val[1]
-                                self.ball.center_x = self.right - val[0] # mirror refrection
-                                # self.ball.center = val
-                            case "player1": # client -> for server game, player1 -> for client game
-                                self.player2.update(val)
-                            case "player2":
-                                self.player1.update(val)
-                            case "client" if self.gg:
-                                self.player1.update(val) # if turn end don't change
-                            case "streak":
-                                self.streak = val
-                            case "cc":
-                                self.cc = val
-                            case "gg":
-                                self.gg = val
+                    # for name, val in data:
+                    #     match name:
+                    #         case "ball":
+                    #             self.ball.center_y = val[1]
+                    #             self.ball.center_x = self.right - val[0] # mirror refrection
+                    #             # self.ball.center = val
+                    #         case "player1":
+                    #             self.player2.update(val)
+                    #             if not self.gg:
+                    #                 self.player2.move_direction = 0
+                    #         case "player2":
+                    #             self.player1.update(val)
+                    #         case "client" if self.gg:
+                    #             self.player1.update(val) # if turn end don't change
+                    #             self.player1.move(self.player1, self) # move it
+                    #         case "streak":
+                    #             self.streak = val
+                    #         case "cc":
+                    #             self.cc = val
+                    #         case "gg":
+                    #             self.gg = val
+                    print(data)
+                    if self.opt == "server":
+                        (
+                            self.player1.move_direction,
+                        ) = data
+                    elif self.opt == "client":
+                        (
+                            self.gg,
+                            self.cc,
+                            self.streak,
+                            self.ball.center,
+                            self.player2.y,
+                            self.player2.color,
+                            self.player2.size, 
+                            self.player2.score,
+                            self.player1.y,
+                            self.player1.color,
+                            self.player1.size, 
+                            self.player1.score,
+                        ) = data 
+
         return True
 
-    def send_data(self, player2_y):
+    def send_data(self):
         if self.opt == "client":
-            self.internet.event_dispatcher("UPDATE", ("client", {"y": player2_y}))
+            # self.internet.update_data = (
+            #     ("client", {"move_direction": self.player2.move_direction}),
+            # )
+            self.internet.update_data = (
+                self.player2.move_direction,
+            )
+
         elif self.opt == "server":
-            for name, value in (
-                ("ball", self.ball.center),
-                ("player1", {"y": self.player1.y, "color": self.player1.color, "size": self.player1.size, "score": self.player1.score}),
-                ("player2", {"y": self.player2.y, "color": self.player2.color, "size": self.player2.size, "score": self.player2.score}),
-                ("streak", self.streak),
-                ("cc", self.cc),
-                ("gg", self.gg),
-            ):
-                self.internet.event_dispatcher("UPDATE", (name, value))
+            # self.internet.update_data = (
+            #     ("gg", self.gg),
+            #     ("cc", self.cc),
+            #     ("streak", self.streak),
+            #     ("ball", self.ball.center),
+            #     ("player1", {"y": self.player1.y, "color": self.player1.color, "size": self.player1.size, "score": self.player1.score}),
+            #     ("player2", {"y": self.player2.y, "color": self.player2.color, "size": self.player2.size, "score": self.player2.score}),
+            # )
+            self.internet.update_data = (
+                self.gg,
+                self.cc,
+                self.streak,
+                self.ball.center,
+                self.player1.y,
+                self.player1.color,
+                self.player1.size, 
+                self.player1.score,
+                self.player2.y,
+                self.player2.color,
+                self.player2.size, 
+                self.player2.score,
+            )

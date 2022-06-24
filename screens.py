@@ -287,8 +287,8 @@ class GameScreen(Screen, MyScreen, EventManager):
     def tick(self, *dt):
         permission = self.handle_actions() # permission will be False in case of leaving
         if permission:
-            player2_center = self.handle_game_action() 
-            self.send_data(player2_center)
+            self.handle_game_action() 
+            self.send_data()
         
     def start_countdown(self, callback, callback_data, duration):
         if not self.cc: # if it wasn't paused during another countdown
