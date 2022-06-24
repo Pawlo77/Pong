@@ -1,5 +1,5 @@
 from widgets import ErrorPopup
-from settings import Settings
+from settings import settings
 
 
 class EventManager: # helper for GameScreen
@@ -77,6 +77,28 @@ class EventManager: # helper for GameScreen
             name, data = self.actions.pop(0)
 
             match name: # for all game options
+                case "UPDATE" if data:
+                    if self.opt == "server" and self.gg:
+                        (
+                            self.player1.move_direction,
+                        ) = data
+                        self.player1.move(self.player1, self)
+                    elif self.opt == "client":
+                        (
+                            self.gg,
+                            self.cc,
+                            self.streak,
+                            ball_center,
+                            self.player2.y,
+                            self.player2.color,
+                            self.player2.score,
+                            self.player1.y,
+                            self.player1.color,
+                            self.player1.score,
+                        ) = data 
+                        self.ball.center = [self.right - ball_center[0], ball_center[1]] # lient ball x coordinate is mirrorded from server's one
+                        if not self.gg:
+                            self.player2.move_direction = 0 # stop moving so on the turn start paddle won't "fly" in unexpected direction by itself
                 case "ERROR": # connection to second player lost or he left
                     ErrorPopup(*data).open()
                 case "LEAVE":
@@ -85,96 +107,41 @@ class EventManager: # helper for GameScreen
                     if self.internet is not None:
                         self.manager.get_screen(self.internet.type_).reset()
                     self.reset()
-                    return False
+                    return False # mark that other game events are redundant
                 case "START":
                     self.start()
                 case "PAUSE":
-                    if self.opt in ["server", "offline", "solo"]:
+                    if self.opt in ["server", "offline", "solo"]: # if this PC calculates the game
                         self.pause()
-                        self.add_action("PAUSE_SCREEN", None)
+                        self.add_action("PAUSE_SCREEN", None) # set pause screen 
                         if self.opt == "server": # set pause screen in client
                             self.internet.event_dispatcher("PAUSE_SCREEN", None)
                     elif self.opt == "client":
                         self.internet.event_dispatcher("PAUSE", None) # send request to the server
                 case "PAUSE_SCREEN":
-                    Settings.inform("Game paused.")
+                    settings.inform("Game paused.")
                     self.manager.transition.duration = 0
                     self.manager.current = "pause"
                 case "UNPAUSE":
-                    if self.opt in ["server", "offline", "solo"]:
+                    if self.opt in ["server", "offline", "solo"]: # if this PC calculates the game# if this PC calculates the game
                         self.unpause()
-                        self.add_action("UNPAUSE_SCREEN", None)
-                        if self.opt == "server": # set pause screen in client
+                        self.add_action("UNPAUSE_SCREEN", None) # discard pause screen
+                        if self.opt == "server": # discard pause screen in client
                             self.internet.event_dispatcher("UNPAUSE_SCREEN", None)
                     elif self.opt == "client":
                         self.internet.event_dispatcher("UNPAUSE", None) # send request to the server
                 case "UNPAUSE_SCREEN":
-                    Settings.inform("Game unpaused.")
+                    settings.inform("Game unpaused.")
                     self.manager.transition.duration = 0
                     self.manager.current = "game"
-                case "UPDATE":
-                    # for name, val in data:
-                    #     match name:
-                    #         case "ball":
-                    #             self.ball.center_y = val[1]
-                    #             self.ball.center_x = self.right - val[0] # mirror refrection
-                    #             # self.ball.center = val
-                    #         case "player1":
-                    #             self.player2.update(val)
-                    #             if not self.gg:
-                    #                 self.player2.move_direction = 0
-                    #         case "player2":
-                    #             self.player1.update(val)
-                    #         case "client" if self.gg:
-                    #             self.player1.update(val) # if turn end don't change
-                    #             self.player1.move(self.player1, self) # move it
-                    #         case "streak":
-                    #             self.streak = val
-                    #         case "cc":
-                    #             self.cc = val
-                    #         case "gg":
-                    #             self.gg = val
-                    print(data)
-                    if self.opt == "server":
-                        (
-                            self.player1.move_direction,
-                        ) = data
-                    elif self.opt == "client":
-                        (
-                            self.gg,
-                            self.cc,
-                            self.streak,
-                            self.ball.center,
-                            self.player2.y,
-                            self.player2.color,
-                            self.player2.size, 
-                            self.player2.score,
-                            self.player1.y,
-                            self.player1.color,
-                            self.player1.size, 
-                            self.player1.score,
-                        ) = data 
-
         return True
 
     def send_data(self):
         if self.opt == "client":
-            # self.internet.update_data = (
-            #     ("client", {"move_direction": self.player2.move_direction}),
-            # )
             self.internet.update_data = (
                 self.player2.move_direction,
             )
-
         elif self.opt == "server":
-            # self.internet.update_data = (
-            #     ("gg", self.gg),
-            #     ("cc", self.cc),
-            #     ("streak", self.streak),
-            #     ("ball", self.ball.center),
-            #     ("player1", {"y": self.player1.y, "color": self.player1.color, "size": self.player1.size, "score": self.player1.score}),
-            #     ("player2", {"y": self.player2.y, "color": self.player2.color, "size": self.player2.size, "score": self.player2.score}),
-            # )
             self.internet.update_data = (
                 self.gg,
                 self.cc,
@@ -182,10 +149,8 @@ class EventManager: # helper for GameScreen
                 self.ball.center,
                 self.player1.y,
                 self.player1.color,
-                self.player1.size, 
                 self.player1.score,
                 self.player2.y,
                 self.player2.color,
-                self.player2.size, 
                 self.player2.score,
             )

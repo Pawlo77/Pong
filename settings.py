@@ -1,18 +1,14 @@
-from audioop import add
-
-
 class Settings():
-    fps = 60.
-    speed = 0.01
-    speedup = 1.05
-    moveSpeed = 0.02
-    botMoveSpeed = 0.01
-
+    fps = 60
+    speed = 0.01 # ball speed
+    speedup = 1.05 # ball speeds up every time it bounce off paddle
+    moveSpeed = 0.02 # paddle move speed
+    botMoveSpeed = 0.002 # bot is slower than real player
     startPaddleSize = 0.3
-    paddleShrink = 0.95
+    rounds_to_win = 10
 
     font_size = 120
-    transition_duration = 0
+    transition_duration = 3
 
     default_port = 8000
     host = "127.0.0.1"
@@ -21,33 +17,38 @@ class Settings():
 
     connection_timeout = 2
     socket_timeout = 0.1
-    accept_timeout = 10
-    waiting_timeout = 180
-    joining_timeout = 180
+    accept_timeout = 10 # time tha user has to accept the game in AcceptPopup
+    waiting_timeout = 180 # time during after server will be closed if it hadn't started the game
+    joining_timeout = 180 # time during after JoinPopup will dissapear
 
-    server_frequency = 1
+    server_time_refresh = 0.05 # waiting time between server loops in ms for players
+    server_frequency = 1 # waiting time between server loops in ms for rest
     encoding = "utf-8"
     key = "7fZmv`UXa75@K7e$3+g@"
 
     debug = False
     verbose = True
 
-    def handle_error(e): 
-        if Settings.debug:
+    def handle_error(self, e): 
+        if self.debug:
             print(e)
 
-    def inform(msg):
-        if Settings.verbose:
+    def inform(self, msg):
+        if self.verbose:
             print(msg)
 
-    def allowed(address):
+    def allowed(self, address):
         if address:
-            return address[0] == Settings.host and Settings.default_port <= int(address[1]) <= Settings.default_port + Settings.rooms_num
+            return address[0] == self.host and self.default_port <= int(address[1]) <= self.default_port + self.rooms_num
         return False
 
 
+settings = Settings()
+
+
 all = {
-    "key": Settings.key
+
+    "key": settings.key
 }
 
 ALIVE = {"free": None,}

@@ -37,10 +37,16 @@
 <ScoreLabel@DefaultLabel>:
     font_size: max(min(self.height / 15, self.width / 15), 1)
 
+<TextInput>:
+    font_size: max(min(self.height / 2, self.width / 5), 1)
+    text_size: self.size
+    valign: "middle"
+    halign: "center"
+
 <BoxLayout>:
     orientation: "vertical"
 
-<GridLayout>:
+<DefaultGridLayout@GridLayout>:
     spacing: root.height / 20
     padding: min(root.height / 5, root.width / 10)
 
@@ -160,19 +166,103 @@
                 root.manager.current = "connect"
     
         OptionButton: 
-            text: "Stats"
+            text: "Settings"
             on_press:
                 root.manager.transition.duration = root.settings.transition_duration
                 root.manager.transition.direction = "right"
-                root.manager.current = "stats"
+                root.manager.current = "settings"
 
         OptionButton: 
             text: "Exit"
             on_press:
                 exit(0)
 
-<ConnectScreen>:
+<SettingsScreen>:
+    log: log
+    debug: debug
+    fps: fps
+    latency: latency
+    bot: bot
+    user: user
+    ball: ball
+    rounds: rounds
+
     GridLayout:
+        size_hint: (1, 0.8)
+        pos_hint: {"top": 1}
+        cols: 2
+        rows: 8
+        spacing: min(self.height / 40, self.width / 80)
+        padding: min(self.height / 40, self.width / 80)
+
+        DefaultLabel:
+            text: "Show logs in console: "
+        CheckBox:
+            id: log
+            active: root.settings.verbose
+
+        DefaultLabel:
+            text: "Developer mode: "
+        CheckBox:
+            id: debug
+            active: root.settings.debug
+
+        DefaultLabel:
+            text: "Rounds to win: "
+        TextInput:
+            id: rounds
+            pos_hint: {"right": 1, "center_y": root.center_y}
+            hint_text: str(root.settings.rounds_to_win)
+
+        DefaultLabel:
+            text: "Set fps: "
+        TextInput:
+            id: fps
+            pos_hint: {"right": 1, "center_y": root.center_y}
+            hint_text: str(root.settings.fps)
+
+        DefaultLabel:
+            text: "Set server latency [ms]: "
+        TextInput:
+            id: latency
+            pos_hint: {"right": 1, "center_y": root.center_y}
+            hint_text: str(root.settings.server_time_refresh)
+    
+        DefaultLabel:
+            text: "Bot speed"
+        TextInput:
+            id: bot
+            pos_hint: {"right": 1, "center_y": root.center_y}
+            hint_text: str(root.settings.botMoveSpeed)
+
+        DefaultLabel:
+            text: "User speed"
+        TextInput:
+            id: user
+            pos_hint: {"right": 1, "center_y": root.center_y}
+            hint_text: str(root.settings.moveSpeed)
+
+        DefaultLabel:
+            text: "Ball speed"
+        TextInput:
+            id: ball
+            pos_hint: {"right": 1, "center_y": root.center_y}
+            hint_text: str(root.settings.speed)
+
+    OptionButton:
+        text: "Back"
+        size_hint: (0.3, 0.1)
+        pos_hint: {"center_x": 0.5, "y": 0.05}
+        on_press:
+            root.manager.transition.duration = root.settings.transition_duration
+            root.manager.transition.direction = "left"
+            root.manager.current = "menu"
+            root.validate()
+
+           
+
+<ConnectScreen>:
+    DefaultGridLayout:
         cols: 1
         rows: 4
 
@@ -210,7 +300,7 @@
 <NameScreen>
     username: username
 
-    GridLayout:
+    DefaultGridLayout:
         cols: 1
         rows: 4
 
@@ -346,13 +436,13 @@
 
     Paddle:
         id: player1
-        center_y: root.center_y
+        # center_y: root.center_y
         x: self.width / 2
         size_hint: 0.02, 0.33
         
     Paddle:
         id: player2
-        center_y: root.center_y
+        # center_y: root.center_y
         right: root.right - self.width / 2
         size_hint: 0.02, 0.33
 

@@ -1,3 +1,4 @@
+from re import T
 from kivy.properties import NumericProperty, ObjectProperty, ReferenceListProperty, BooleanProperty, StringProperty, ColorProperty, NumericProperty, ListProperty
 from kivy.vector import Vector
 from kivy.core.window import Window
@@ -8,16 +9,19 @@ from random import randint, choice
 from functools import partial
 from _thread import *
 
-from settings import Settings
-from widgets import ErrorPopup, AcceptPopup, JoinPopup
+from settings import settings
+from widgets import ErrorPopup, AcceptPopup, JoinPopup, Paddle
 from bot import Bot
 from server import Server
 from client import Client
 from helpers import EventManager
 
+
 class MyScreen():
     def __init__(self):
-        self.settings = Settings()
+        self.settings = settings # all screens have access to settings, used so .kv can access them
+    # convencion: every ing means threaded process / clock interval
+    # ticking administrates events
 
     def add_action(self, name, data):
         self.actions.append((name, data))
@@ -42,13 +46,13 @@ class NameScreen(Screen, MyScreen):
             username = self.username.text.strip()
             username = username[:10] + "..." if len(username) > 10 else username
 
-            self.manager.transition.duration = Settings.transition_duration
+            self.manager.transition.duration = settings.transition_duration
             self.manager.transition.direction = "left"
             self.manager.current = self.next_screen
             self.manager.current_screen.initialize(username)
             self.reset()
         else:
-            self.username_border_col = "red"
+            self.username_border_col = "red" # mark that wrong data provided
 
     def reset(self): 
         self.username_border_col = "white"
@@ -57,7 +61,7 @@ class NameScreen(Screen, MyScreen):
 
 class ServerScreen(Screen, MyScreen):
     dots = NumericProperty(0) # to change number of dots on the end of screen's title 
-    time = NumericProperty(Settings.waiting_timeout)
+    time = NumericProperty(settings.waiting_timeout)
     clients_list = ListProperty([])
 
     def __init__(self, **kwargs):
@@ -78,13 +82,13 @@ class ServerScreen(Screen, MyScreen):
         self.dots = 0
         self.clients_list = []
         self.actions = [] # all must be O(1)
-        self.time = Settings.waiting_timeout # shut down the server after specified time if is doesn't start a game
+        self.time = settings.waiting_timeout # shut down the server after specified time if is doesn't start a game
 
     def initialize(self, server_name):
         self.reset()
-        self.ticking = Clock.schedule_interval(self.tick, 1)# administrates all actions
+        self.ticking = Clock.schedule_interval(self.tick, 1)
         self.server.initialize(server_name, self)
-        if not self.server.working:
+        if not self.server.working: # server encountered an error
             self.manager.current = "connect"
             ErrorPopup("Server error", "Unable to create server, try again later.").open()
             self.reset()
@@ -123,7 +127,7 @@ class ServerScreen(Screen, MyScreen):
                 case "START":
                     self.ticking.cancel() # we can't reset here, server will be lost
                     self.accept.back_up()
-                    self.manager.transition.duration = Settings.transition_duration
+                    self.manager.transition.duration = settings.transition_duration
                     self.manager.transition.direction = "up"
                     self.manager.current = "game"
                     self.manager.current_screen.set_up("server", data)
@@ -162,7 +166,7 @@ class ClientScreen(Screen, MyScreen):
         self.client.initialize(client_name, self)
         self.ticking = Clock.schedule_interval(self.tick, 1)
 
-    def add_server(self, server_name, server_address):
+    def add_server(self, server_name, server_address): # add server name to be displayed on list
         self.servers_list.append({
             "text": server_name, "address": server_address, "root": self
         })
@@ -189,26 +193,64 @@ class ClientScreen(Screen, MyScreen):
                 case "START":
                     self.ticking.cancel() # we can't reset here, client will be lost
                     self.join.back_up(False) # back up but don't abandon the server
-                    self.manager.transition.duration = Settings.transition_duration
+                    self.manager.transition.duration = settings.transition_duration
                     self.manager.transition.direction = "up"
                     self.manager.current = "game"
                     self.manager.current_screen.set_up("client", data)
 
-    def handler(self, server_name, server_address):
+    def handler(self, server_name, server_address): # called whan user wants to join a server
         self.client.request_game(server_address) # send request to a server
         self.join = JoinPopup(server_name, self) 
         self.join.open()
         
 
-class StatsScreen(Screen, MyScreen):
-    pass
+class SettingsScreen(Screen, MyScreen):
+    def validate(self): # check if data provied are in correct format and range
+        settings.verbose = self.log.active
+        settings.debug = self.debug.active
+
+        try:
+            fps = int(self.fps.text)
+            fps = min(fps, 600)
+        except:
+            pass
+        else:
+            settings.fps = fps
+            self.fps.hint_text = str(fps)
+        self.fps.text = ""
+
+        fields = [self.latency, self.bot, self.user, self.ball, self.rounds]
+        targets = []
+        for idx in range(len(fields)):
+            try:
+                float_ = float(fields[idx].text)
+            except:
+                targets.append(None)
+            else:
+                targets.append(float_)
+
+        if targets[0] is not None:
+            settings.server_time_refresh = targets[0]
+        if targets[1] is not None:
+            settings.botMoveSpeed = targets[1]
+        if targets[2] is not None:
+            settings.moveSpeed = targets[2]
+        if targets[3] is not None:
+            settings.speed = targets[3]
+        if targets[4] is not None:
+            settings.rounds_to_win = int(targets[4])
+    
+        for idx in range(len(fields)):
+            if targets[idx] is not None:
+                fields[idx].hint_text = str(targets[idx])
+                fields[idx].text = ""
 
 
 class PauseScreen(Screen, MyScreen):
     def abort(self):
         game = self.manager.get_screen("game")
 
-        if game.internet is not None:
+        if game.internet is not None: # let others know we are leaving
             game.internet.abandon()
         else:
             game.add_action("LEAVE", None)
@@ -216,9 +258,9 @@ class PauseScreen(Screen, MyScreen):
     def exit_(self):
         game = self.manager.get_screen("game")
         
-        if game.internet is not None:
+        if game.internet is not None: # let others know we are leaving
             game.internet.abandon()
-        Clock.schedule_once(exit, 0.5)
+        Clock.schedule_once(exit, 0.5) # give the internet time to send info
 
 
 class GameScreen(Screen, MyScreen, EventManager):
@@ -232,33 +274,30 @@ class GameScreen(Screen, MyScreen, EventManager):
 
     def __init__(self, **kwargs):
         super(GameScreen, self).__init__(**kwargs)
-        self.reset(True)
 
     def reset(self, initial=False):
-        Settings.inform(f"Resetting the game ({initial}).")
+        settings.inform(f"Resetting the game ({initial}).")
         if initial:
             self.keyboard = Window.request_keyboard(None, self)
-            self.ticking = None
-            self.reseting_players = None
-            self.counting = None
-            self.serving = None
+            self.ticking = self.counting = self.serving = None
         else:
             for player in self.players: 
                 player.score = 0
-            for event in [self.ticking, self.counting, self.serving, self.reseting_players]:
+            for event in [self.ticking, self.counting, self.serving]:
                 if event is not None:
                     event.cancel()
-            self.reset_players()
             self.keyboard.unbind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
 
+        self.reset_players()
         self.started = False
         self.cc = self.gg = False # marks if countdown or turn is active
         self.cache_streak = self.streak = 0
-        self.internet = None # client or server handling connections 
+        self.internet = self.target = None # client or server handling connections 
         self.actions = [] # all must be O(1)
 
     def set_up(self, opt, internet=None):
-        Settings.inform(f"Setting up a game: {opt}")
+        self.reset(True)
+        settings.inform(f"Setting up a game: {opt}")
         self.opt = opt
         self.internet = internet
 
@@ -268,20 +307,23 @@ class GameScreen(Screen, MyScreen, EventManager):
                 self.player1.name = "Bot"
                 self.player2.name = "You"
             case "offline":
+                self.player1.move = Paddle.move
                 self.player1.name = "Player 1"
                 self.player2.name = "Player 2"
             case "server":
+                self.player1.move = Paddle.move
                 self.internet.screen = self
                 self.player1.name = internet.client_name
                 self.player2.name = internet.server_name
             case "client":
+                self.player1.move = Paddle.move
                 self.internet.screen = self
                 self.player1.name = internet.server_name
                 self.player2.name = internet.client_name
 
         self.keyboard.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
-        self.ticking = Clock.schedule_interval(self.tick, 1. / Settings.fps) # administrates all game dependencies
-        if self.opt in ["server", "offline", "solo"]:
+        self.ticking = Clock.schedule_interval(self.tick, 1. / settings.fps) # administrates all game dependencies
+        if self.opt in ["server", "offline", "solo"]: # if this computer calculates game events
             self.start()
 
     def tick(self, *dt):
@@ -308,7 +350,7 @@ class GameScreen(Screen, MyScreen, EventManager):
 
     def start(self):
         self.ball.center = self.center
-        self.start_countdown(self.serve, [choice([-1, 1])], 1)
+        self.start_countdown(self.serve, [choice([-1, 1])], 5)
 
     def pause(self):
         if self.gg: # if during round
@@ -316,11 +358,11 @@ class GameScreen(Screen, MyScreen, EventManager):
         elif self.cc: # if during countdown
             self.cc = False
             self.counting.cancel()
-        elif self.serving is not None:
+        elif self.serving is not None: # if serving a ball might be scheduled
             self.serving.cancel()
 
     def unpause(self): 
-        if not self.started:
+        if not self.started: # if game haven't started at all, call normal entry
             self.start()
         else:
             self.start_countdown(self.unpause_helper, [], 3)
@@ -328,22 +370,26 @@ class GameScreen(Screen, MyScreen, EventManager):
     def unpause_helper(self):
         self.streak = self.cache_streak
         self.gg = True # mark turn started
+        if self.target is not None and self.target[0] == "serve":
+            self.serve(*self.target[1:])
+        self.target = None # reset target call
         
     def serve(self, direction, *dt):
-        Settings.inform(f"Serving a ball (direction -> {direction})")
+        settings.inform(f"Serving a ball (direction -> {direction})")
+        self.reset_players()
         self.started = True
         self.gg = True
         self.ball.center = self.center
-        self.ball.velocity = Vector(direction * self.height * Settings.speed, 0).rotate(randint(-60, 60))
+        self.ball.velocity = Vector(direction * self.height * settings.speed, 0).rotate(randint(-60, 60))
 
     def turn_end(self, winner, direction):
-        Settings.inform(f"Turn ended. ({winner.name} has won)")
+        settings.inform(f"Turn ended. ({winner.name} has won)")
         self.gg = False # mark turn end
         self.streak = 0 # reset streak
         self.ball.center = self.center # pause now won't take twice the same turn end
         winner.reward()
-                            
-        self.reseting_players = Clock.schedule_once(self.reset_players, 1) # reset players after 1 s so player could prepare
+
+        self.target = ("serve", direction)  # during turn end mark that we need to call serve again in case of pause right now
         self.serving = Clock.schedule_once(partial(self.serve, direction), 1) # start next turn after 1 s so player could prepare
 
     def reset_players(self, *dt): # set all players in starting positions and set their color to white
