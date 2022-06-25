@@ -36,6 +36,7 @@ class Server(Internet):
 
         port = settings.PORT
         socket_ = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        socket_.settimeout(settings.socket_timeout)
         while port <= settings.MAX_PORT:
             try:
                 address = (settings.HOST, port)
@@ -157,12 +158,11 @@ class Server(Internet):
         self.connection_error(is_client, address, socket_)
 
     def get_new_socket(self): # get first free socket on this pc
-        port = 1
+        port = 2000
         socket_ = self.get_empty_socket()
 
         while True:
             address = (settings.HOST, port)
-
             if not settings.allowed(address): # if it is not port used by our main servers 
                 try:
                     socket_.bind(address)
@@ -171,11 +171,12 @@ class Server(Internet):
                     port += 1
                 else:
                     return socket_, address
+            else:
+                port += 1
 
     def listen(self):
         while self.working:
             data, address = self.recive(self.socket_)
-
             if data == ALIVE and address not in self.clients: # if we found new connection from identified client
                 new_socket_, new_address = self.get_new_socket()
                 
@@ -185,7 +186,7 @@ class Server(Internet):
                     **REQUEST_RECIVED
                 }
                 self.send(self.socket_, response, address)
-                settings.inform(f"New connection from {address[1]}.")
+                settings.inform(f"New connection from {address}.")
                 self.clients.add(address)
                 start_new_thread(self.listen_client, (new_socket_, address, time.time()))
 

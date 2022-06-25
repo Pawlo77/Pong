@@ -13,11 +13,10 @@ kivy.require("2.1.0")
 Builder.load_file("style.kv")
 Window.size = (800, 600)
 
-
 class PongApp(App):
 
     def build(self): 
-        sm = ScreenManager(size=(200, 200))
+        sm = ScreenManager()
         
         sm.add_widget(MenuScreen(name="menu"))
         sm.add_widget(ConnectScreen(name="connect"))

@@ -1,6 +1,5 @@
 import socket
 
-
 class Settings():
     fps = 60
     speed = 0.01 # ball speed
@@ -43,7 +42,7 @@ class Settings():
 
     def allowed(self, address):
         if address:
-            return address[0] == self.HOST and (address[1] < self.PORT or address[1] > self.MAX_PORT)
+            return address[0] == self.HOST and self.PORT <= address[1] <= self.MAX_PORT
         return False
 
 
@@ -51,7 +50,6 @@ settings = Settings()
 
 
 all = {
-
     "key": settings.key
 }
 

@@ -1,6 +1,7 @@
 import socket
 import json
 import os
+import platform
 
 from settings import settings, REQUEST_RECIVED, all
 
@@ -60,6 +61,7 @@ class Internet:
 
     def internet_action(self, data, send):
         if self.data or self.update_data: # if we have data to send
+            print(self.update_data)
             send_ = self.data + [("UPDATE", self.update_data)]
             send_ = {"GAME": send_}
             send(send_)
@@ -72,43 +74,49 @@ class Internet:
         if "GAME" in data and data["GAME"]:
             self.screen.actions += data["GAME"]
 
-    def get_ip(line):
-        try:
-            return line.split()[0].strip()
-        except:
-            return    
-
     def check_ip(ip, local):
         try:
             ip_ = ip.split(".")
             end = int(ip_[-1])
             start = int(ip_[0])
         except:
-            return
+            pass
         else:
+            if local is None:
+                local = start
             if end not in [1, 255] and start == local:
-                return ip
+                return ip, local
+        return None, local
 
     def get_devices():
         devices = []
         data = os.popen('arp -a')
-        data = data.read().split("Interface")
+        data = data.read().split("\n\n") # splits interfaces
 
+        system = platform.system()
+        
         # comment line below to scan every interface
         data = [data[-1]] # keep only local wifi (leave apps like hamachi)
 
         for interface in data:
-            if interface.startswith(": "):
-                interface = interface[2:].split("\n")
+            local = None
+            interface = interface.strip("\n")
 
-                my_ip = interface[0] # skip remaining ": "
-                my_ip = Internet.get_ip(my_ip)
-                # devices.append(my_ip) # allow host on the same device as client
-                local = int(my_ip.split(".")[0])
+            if system.lower() == "windows":
+                interface = interface.split("\n")[2:] # skip headers lines
 
-                for ip in interface[2:]: # skip header line
-                    ip = Internet.get_ip(ip)
-                    ip = Internet.check_ip(ip, local)
+                for ip in interface:
+                    ip = ip.strip().split()[0]
+                    ip, local = Internet.check_ip(ip, local)
+                    if ip is not None:
+                        devices.append(ip)
+
+            elif system.lower() in ["darwin", "linux"]: # macos
+                interface = interface.split("\n")
+            
+                for ip in interface:
+                    ip = ip.split()[1].strip("()")
+                    ip, local = Internet.check_ip(ip, local)
                     if ip is not None:
                         devices.append(ip)
         return devices
