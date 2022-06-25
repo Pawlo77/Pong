@@ -1,4 +1,5 @@
 from _thread import *
+from audioop import add
 import time
 import socket
 
@@ -133,7 +134,7 @@ class Client(Internet):
                     send(GAME_START) # send that we understood and that we are ready to play
                     self.waiting = False
                     self.playing = True
-                    self.listening = False
+                    self.seeking = False
                     self.server_name = server_name
                     refresh = settings.server_time_refresh # set waiting to game waiting (much smaller)
                     self.screen.add_action("START", self)
@@ -169,18 +170,19 @@ class Client(Internet):
         socket_ = self.get_empty_socket()
 
         while self.seeking: # as long as we seek connection with a new server
-            for port in range(settings.default_port, settings.default_port + settings.rooms_num):
-                address = (settings.host, port)
+            for ip in Internet.get_devices():
+                for port in range(settings.PORT, settings.MAX_PORT + 1):
+                    address = (ip, port)
 
-                if address not in self.rooms: # if we aren't connected to him
-                    server_name, new_address = self.test_server(address, socket_)
+                    if address not in self.rooms: # if we aren't connected to him
+                        server_name, new_address = self.test_server(address, socket_)
 
-                    if server_name is not None: # if it is our server and it's open for us
-                        new_address = tuple(new_address)
-                        settings.inform(f"New connection found at {address}, redirected to {new_address}.")
-                        self.screen.add_action("ADD", (server_name, new_address))
-                        self.rooms.add(address)
-                        start_new_thread(self.listen_server, (socket_, server_name, new_address, address, time.time()))
-                        socket_ = self.get_empty_socket() # request new socket to seeking the servers
-            time.sleep(settings.server_frequency)
-                    
+                        if server_name is not None: # if it is our server and it's open for us
+                            new_address = tuple(new_address)
+                            settings.inform(f"New connection found at {address}, redirected to {new_address}.")
+                            self.screen.add_action("ADD", (server_name, new_address))
+                            self.rooms.add(address)
+                            start_new_thread(self.listen_server, (socket_, server_name, new_address, address, time.time()))
+                            socket_ = self.get_empty_socket() # request new socket to seeking the servers
+                time.sleep(settings.server_frequency)
+                        

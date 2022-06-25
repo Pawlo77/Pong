@@ -1,5 +1,6 @@
 import socket
 import json
+import os
 
 from settings import settings, REQUEST_RECIVED, all
 
@@ -71,3 +72,43 @@ class Internet:
         if "GAME" in data and data["GAME"]:
             self.screen.actions += data["GAME"]
 
+    def get_ip(line):
+        try:
+            return line.split()[0].strip()
+        except:
+            return    
+
+    def check_ip(ip, local):
+        try:
+            ip_ = ip.split(".")
+            end = int(ip_[-1])
+            start = int(ip_[0])
+        except:
+            return
+        else:
+            if end not in [1, 255] and start == local:
+                return ip
+
+    def get_devices():
+        devices = []
+        data = os.popen('arp -a')
+        data = data.read().split("Interface")
+
+        # comment line below to scan every interface
+        data = [data[-1]] # keep only local wifi (leave apps like hamachi)
+
+        for interface in data:
+            if interface.startswith(": "):
+                interface = interface[2:].split("\n")
+
+                my_ip = interface[0] # skip remaining ": "
+                my_ip = Internet.get_ip(my_ip)
+                # devices.append(my_ip) # allow host on the same device as client
+                local = int(my_ip.split(".")[0])
+
+                for ip in interface[2:]: # skip header line
+                    ip = Internet.get_ip(ip)
+                    ip = Internet.check_ip(ip, local)
+                    if ip is not None:
+                        devices.append(ip)
+        return devices

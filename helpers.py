@@ -78,6 +78,7 @@ class EventManager: # helper for GameScreen
 
             match name: # for all game options
                 case "UPDATE" if data:
+                    print(data)
                     if self.opt == "server" and self.gg:
                         (
                             self.player1.move_direction,

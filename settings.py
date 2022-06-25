@@ -1,3 +1,6 @@
+import socket
+
+
 class Settings():
     fps = 60
     speed = 0.01 # ball speed
@@ -5,16 +8,18 @@ class Settings():
     moveSpeed = 0.02 # paddle move speed
     botMoveSpeed = 0.002 # bot is slower than real player
     startPaddleSize = 0.3
-    rounds_to_win = 1
-    time_to_start = 1
+    rounds_to_win = 10
+    time_to_start = 5
     time_to_unpause = 3
 
     transition_duration = 0
 
-    default_port = 8000
-    host = "127.0.0.1"
-    rooms_num = 20
+    PORT = 8000
+    MAX_PORT = 8001
+    HOST = socket.gethostbyname(socket.gethostname())
     conn_data_limit = 1024
+    encoding = "utf-8"
+    key = "7fZmv`UXa75@K7e$3+g@"
 
     connection_timeout = 2
     socket_timeout = 0.1
@@ -22,10 +27,8 @@ class Settings():
     waiting_timeout = 180 # time during after server will be closed if it hadn't started the game
     joining_timeout = 180 # time during after JoinPopup will dissapear
 
-    server_time_refresh = 0.05 # waiting time between server loops in ms for players
     server_frequency = 1 # waiting time between server loops in ms for rest
-    encoding = "utf-8"
-    key = "7fZmv`UXa75@K7e$3+g@"
+    server_time_refresh = 0.05 # waiting time between server loops in ms for players
 
     debug = False
     verbose = True
@@ -40,7 +43,7 @@ class Settings():
 
     def allowed(self, address):
         if address:
-            return address[0] == self.host and self.default_port <= int(address[1]) <= self.default_port + self.rooms_num
+            return address[0] == self.HOST and (address[1] < self.PORT or address[1] > self.MAX_PORT)
         return False
 
 

@@ -34,11 +34,11 @@ class Server(Internet):
         self.server_name = server_name
         self.screen = screen
 
-        port = settings.default_port
+        port = settings.PORT
         socket_ = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        while port < settings.default_port + settings.rooms_num:
+        while port <= settings.MAX_PORT:
             try:
-                address = (settings.host, port)
+                address = (settings.HOST, port)
                 socket_.bind(address)
             except Exception as e:
                 settings.handle_error(e)
@@ -161,7 +161,7 @@ class Server(Internet):
         socket_ = self.get_empty_socket()
 
         while True:
-            address = (settings.host, port)
+            address = (settings.HOST, port)
 
             if not settings.allowed(address): # if it is not port used by our main servers 
                 try:
