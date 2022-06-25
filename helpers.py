@@ -1,6 +1,9 @@
+from kivy.core.window import Window
+from kivy.vector import Vector
+
 from widgets import ErrorPopup
 from settings import settings
-from kivy.core.window import Window
+
 
 class EventManager: # helper for GameScreen
 
@@ -78,7 +81,6 @@ class EventManager: # helper for GameScreen
 
             match name: # for all game options
                 case "UPDATE" if data:
-                    print(data)
                     if self.opt == "server" and self.gg:
                         (
                             self.player1.move_direction,
@@ -99,7 +101,7 @@ class EventManager: # helper for GameScreen
                         ) = data 
                         self.player1.y = Window.size[1] * player1_y
                         self.player2.y = Window.size[1] * player2_y
-                        ball_center = Window.size * ball_center
+                        ball_center = Vector(*Window.size) * Vector(*ball_center)
                         self.ball.center = [self.right - ball_center[0], ball_center[1]] # lient ball x coordinate is mirrorded from server's one
                         if not self.gg:
                             self.player2.move_direction = 0 # stop moving so on the turn start paddle won't "fly" in unexpected direction by itself
@@ -153,7 +155,7 @@ class EventManager: # helper for GameScreen
                 self.gg,
                 self.cc,
                 self.streak,
-                self.ball.center / Window.size,
+                self.ball.center / Vector(Window.size),
                 self.player1.y / Window.size[1],
                 self.player1.color,
                 self.player1.score,

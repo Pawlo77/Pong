@@ -5,6 +5,7 @@ import platform
 
 from settings import settings, REQUEST_RECIVED, all
 
+
 class Internet:
     def __init__(self):
         self.reset_internet(True)
@@ -61,7 +62,6 @@ class Internet:
 
     def internet_action(self, data, send):
         if self.data or self.update_data: # if we have data to send
-            print(self.update_data)
             send_ = self.data + [("UPDATE", self.update_data)]
             send_ = {"GAME": send_}
             send(send_)

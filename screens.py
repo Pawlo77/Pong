@@ -1,5 +1,3 @@
-from os import stat
-from re import T
 from kivy.properties import NumericProperty, ObjectProperty, ReferenceListProperty, BooleanProperty, StringProperty, ColorProperty, NumericProperty, ListProperty
 from kivy.vector import Vector
 from kivy.core.window import Window
@@ -372,6 +370,7 @@ class GameScreen(Screen, MyScreen, EventManager):
     def unpause_helper(self):
         self.streak = self.cache_streak
         self.gg = True # mark turn started
+        print(self.target)
         if self.target is not None and self.target[0] == "serve":
             self.serve(*self.target[1:])
         self.target = None # reset target call
@@ -381,6 +380,7 @@ class GameScreen(Screen, MyScreen, EventManager):
         self.reset_players()
         self.started = True
         self.gg = True
+        self.target = None # serve was done
         self.ball.center = self.center
         self.ball.velocity = Vector(direction * self.height * settings.speed, 0).rotate(randint(-60, 60))
 

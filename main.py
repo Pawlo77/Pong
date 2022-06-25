@@ -1,3 +1,5 @@
+# python >= 3.10
+
 import kivy
 
 from kivy.app import App
